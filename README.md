@@ -4,8 +4,8 @@
 
 ~Time Spent: TODO
 
-Design is documented [here](docs/design.md)
-LLM Usage is documented [here](docs/llm_usage.md)
+Design is documented [here](docs/design.md).
+LLM Usage is documented [here](docs/llm_usage.md).
 
 ## Local Development
 
@@ -33,19 +33,13 @@ TODO - GraphQL (and other examples)
 
 ## Notes
 
-### Tradeoffs
-
-TODO
+### [Tradeoffs](docs/design.md#tradeoffs)
 
 ### [Assumptions](docs/design.md#assumptions)
 
-### Could've But Didn't
+### [Concerns](docs/design.md#concerns)
 
-TODO - list what was intentionally not built
-
-### Possible Improvements
-
-TODO
+### [Possible Improvements](docs/design.md#possible-improvements)
 
 ## Deployment
 
