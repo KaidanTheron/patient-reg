@@ -5,6 +5,9 @@ services:
       dockerfile: dev.dockerfile
     environment:
       - PORT=${BACKEND_PORT} 
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_PORT=${DB_PORT}
+      - DB_USERNAME=${DB_USERNAME}
     volumes:
       - ./apps/backend/src:/backend/src
     ports:
@@ -15,7 +18,8 @@ services:
     image: postgres:latest
     restart: always
     environment:
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USERNAME: ${DB_USERNAME}
       PGPORT: ${DB_PORT}
     volumes:
       - pgdata:/var/lib/postgresql

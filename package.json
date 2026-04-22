@@ -13,5 +13,8 @@
   "packageManager": "pnpm@10.17.1",
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
   }
 }
