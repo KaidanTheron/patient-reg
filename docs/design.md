@@ -112,7 +112,7 @@ flowchart TD;
     E --> F{ID matches record?}
     F -- No --> G[Show mismatch error]
     G --> E
-    F -- Yes --> H[View request status]
+    F -- Yes --> H[View inbox]
     H --> I{Request status?}
     I -- Awaiting completion --> J[Open registration request]
     I -- Needs revision --> K[View rejection reason]
