@@ -1,14 +1,12 @@
 FROM node:20-alpine
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-WORKDIR /app
+WORKDIR /backend
 
 COPY package.json pnpm-lock.yaml ./
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 COPY . .
 
-RUN pnpm run build
-
-CMD ["node", "dist/main"]
+CMD ["pnpm", "run", "start:dev"]

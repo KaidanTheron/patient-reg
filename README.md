@@ -21,7 +21,11 @@ TODO
 
 ### Running The Service
 
-TODO - bash code block
+For hot reloading run:
+```bash
+docker compose -f dev.docker-compose.yaml up -d
+```
+*** note, this only watches your local frontend/app and backend/src ***
 
 ### Running Tests
 

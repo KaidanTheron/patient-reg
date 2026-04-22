@@ -5,9 +5,8 @@ services:
       dockerfile: dev.dockerfile
     environment:
       - PORT=${BACKEND_PORT} 
-    # volumes:
-    #   - ./apps/backend:/app
-    #   - backend_dist:/app/dist
+    volumes:
+      - ./apps/backend/src:/backend/src
     ports:
       - ${BACKEND_PORT}:${BACKEND_PORT}
     depends_on:
@@ -29,14 +28,12 @@ services:
       - PORT=${FRONTEND_PORT}
     ports:
       - ${FRONTEND_PORT}:${FRONTEND_PORT}
-    # volumes:
-    #   - ./apps/frontend:/app
-    #   - frontend_dist:/app/dist
+    volumes:
+      - ./apps/frontend/app:/frontend/app
 
     depends_on:
       - backend
 
 volumes:
   # backend_dist:
-  # frontend_dist:
   pgdata:

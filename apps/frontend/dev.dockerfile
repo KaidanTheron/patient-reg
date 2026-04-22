@@ -1,35 +1,12 @@
-# Base image with pnpm enabled via Corepack
-FROM node:20-alpine AS base
+FROM node:20-alpine
+
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# -----------------------------
-# Development dependencies
-# -----------------------------
-FROM base AS development-dependencies-env
-COPY . /app
-WORKDIR /app
-RUN pnpm install --frozen-lockfile
+WORKDIR /frontend
 
-# -----------------------------
-# Production dependencies only
-# -----------------------------
-FROM base AS production-dependencies-env
-COPY ./package.json ./pnpm-lock.yaml /app/
-WORKDIR /app
-RUN pnpm install --prod --frozen-lockfile
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install
 
-# -----------------------------
-# Build stage
-# -----------------------------
-FROM base AS build-env
-COPY . /app/
-COPY --from=development-dependencies-env /app/node_modules /app/node_modules
-WORKDIR /app
-RUN pnpm run build
+COPY . .
 
-COPY ./package.json ./pnpm-lock.yaml /app/
-COPY --from=production-dependencies-env /app/node_modules /app/node_modules
-
-WORKDIR /app
-
-CMD ["pnpm", "run", "start"]
+CMD ["pnpm", "run", "dev", "--host", "0.0.0.0"]
