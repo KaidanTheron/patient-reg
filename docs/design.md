@@ -21,7 +21,7 @@ The resulting system implemented in this project, which would be part of a large
 1. There exists a global database which stores existing, valid South African IDs of real people, which, from the the perspective of **PatientReg** is read-only.
 2. Patient data for a given person with a valid ID may or may not exist in a pool of other privately owned databases, many of which **PatientReg** does not necessarily have reading access to.
 3. Patients can be linked to more than one practice. This assumption comes from the existence of an inbox feature which allows a user to see registration requests from more than one practice.
-4. There was some interaction pre-registration initiation where a patient's identity was verified, i.e. the registration wouldn't be happening in the first place if there wasn't some identity relevant interaction between the practice and the patient which prompted the registration process to be initialited.
+4. There was some interaction pre-registration initiation where a patient's identity was verified, i.e. the registration wouldn't be happening in the first place if there wasn't some identity relevant interaction between the practice and the patient which prompted the registration process to be initiated.
 
 ### Tradeoffs
 
