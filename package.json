@@ -1,0 +1,17 @@
+{
+  "name": "patient-reg",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend start:dev",
+    "dev": "concurrently -n client,server -c \"bgBlue,bgGreen\" \"pnpm dev:frontend\" \"pnpm dev:backend\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.17.1",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
