@@ -167,7 +167,7 @@ DL;DR:
 ### Identity Verification
 
 Incoming input SA ID is hashed and compared against the registration request's hashed SA ID. This introduces a constraint where the SA ID in the registration request **must** contain a valid SA ID.
-This verification will correctly verify users who are who they say they are but will **not** correctly filter out bad actors who happen to know the ID number. (read verification security concern [here](#concerns))
+This verification will correctly verify users who are who they say they are but will **not** correctly filter out bad actors who happen to know the ID number. (read verification security concern #2 [here](#concerns))
 
 Succesful verification will create an empty patient record for that user. Their ID has been verified through existence in a global database as well as through the internal verification step, and can safely be added as patient record with their SA ID being accepted as verified. 
 
