@@ -76,7 +76,7 @@ patient has many practices
 Details for a registration request:
 - id
 - state (approved, rejected, awaiting completion, awaiting review - submitted)
-- patient SA ID (foreign key, hashed)
+- patient SA ID (foreign key, encrypted)
 - practice id (foreign key)
 
 practice id, patient SA ID pair is unique.
@@ -95,7 +95,14 @@ patient has one identity
 
 ### Patient
 
-TODO
+Patient Data is encrypted
+
+### User
+
+- id
+- username
+- password (hashed)
+- type (can only be admin right now)
 
 ## User Flow Charts
 

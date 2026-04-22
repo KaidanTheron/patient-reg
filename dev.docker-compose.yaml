@@ -16,10 +16,11 @@ services:
     restart: always
     environment:
       POSTGRES_PASSWORD: postgres
+      PGPORT: ${DB_PORT}
     volumes:
       - pgdata:/var/lib/postgresql
     ports:
-      - 5433:5432
+      - ${DB_PORT}:${DB_PORT}
   frontend:
     build:
       context: ./apps/frontend

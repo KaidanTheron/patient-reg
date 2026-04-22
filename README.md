@@ -27,6 +27,12 @@ docker compose -f dev.docker-compose.yaml up -d
 ```
 *** note, this only watches your local frontend/app and backend/src ***
 
+Or if you only want to run the postgres server and everything else manually:
+```bash
+docker compose -f dev.docker-compose.yaml up -d db
+pnpm dev
+```
+
 ### Running Tests
 
 TODO - bash code block
