@@ -1,0 +1,44 @@
+# dependencies
+node_modules
+**/node_modules
+
+# pnpm store (if local)
+.pnpm-store
+.pnpm
+
+# builds
+dist
+build
+coverage
+.next
+out
+.tmp
+.cache
+turbo
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# git
+.git
+.gitignore
+
+# env local secrets
+.env
+.env.local
+.env.*.local
+
+# tests artifacts
+playwright-report
+test-results
+
+# docker noise
+docker-compose*.yml
