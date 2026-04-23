@@ -14,20 +14,23 @@ const envSchema = z.object({
     DB_PORT: z.coerce.number().default(5432),
     DB_HOST: z.string().default("localhost"),
     DB_TYPE: z.enum(DBType).default(DBType.postgres),
+    SECRET: z.string().default("supersecretsecretkey"),
 })
 
 const getEnv = () => {
     const configService = new ConfigService();
 
-    return envSchema.parse({
-        DB_PASSWORD: configService.get("DB_PASSWORD"),
-        DB_USERNAME: configService.get("DB_USERNAME"),
-        DB_PORT: configService.get("DB_PORT"),
-        DB_HOST: configService.get("DB_HOST"),
-        DB_TYPE: configService.get("DB_TYPE"),
-    });
-}
+    const result = envSchema.safeParse(envSchema.keyof().options.reduce((prev, curr) => ({
+        ...prev,
+        [curr]: configService.get(curr)
+    }), {}));
 
-console.log(getEnv())
+    if (!result.success) {
+        const flattenedError = z.flattenError(result.error);
+        throw new Error(JSON.stringify(flattenedError.fieldErrors, null, 2), { cause: "Invalid Environment Variables" });
+    }
+
+    return result.data;
+}
 
 export const env = getEnv();

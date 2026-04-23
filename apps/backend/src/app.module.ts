@@ -6,6 +6,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { datasourceOptions } from "./config/database.config";
 import { ConfigModule } from "@nestjs/config";
 import { graphqlOptions } from "./config/graphql.config";
+import { IdentityModule } from './modules/identity/identity.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { graphqlOptions } from "./config/graphql.config";
     }),
     TypeOrmModule.forRoot(datasourceOptions),
     AuthLinkModule,
+    IdentityModule,
   ],
 })
 export class AppModule {}
