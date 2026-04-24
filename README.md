@@ -9,6 +9,8 @@ LLM Usage is documented [here](docs/llm_usage.md).
 
 ## Local Development
 
+TODO - Remove docker usage for local dev except for postgres. Setup prod docker versions.
+
 ### Prerequisites
 
 TODO - dependencies, versions and how to install them on different platforms
