@@ -5,6 +5,6 @@ export class Identity {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column()
+    @Column({ unique: true })
     saId: string;
 }
