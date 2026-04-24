@@ -14,6 +14,6 @@ import { CryptoIdentityHasher } from './infrastructure/crypto-identity.hasher';
     { provide: IdentityRepository, useClass: TypeOrmIdentityRepository },
     { provide: IdentityHasher, useClass: CryptoIdentityHasher }
   ],
-  exports: [IdentityService],
+  exports: [IdentityService, IdentityHasher],
 })
 export class IdentityModule {}

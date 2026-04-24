@@ -20,7 +20,8 @@ export class AuthLinkResolver {
   @Query(() => ValidatedRegistrationLinkPayload)
   validateRegistrationLink(
     @Args("token") token: string,
+    @Args("id") id: string,
   ): Promise<ValidatedRegistrationLinkPayload> {
-    return this.authLinks.validateRegistrationLinkToken(token);
+    return this.authLinks.validateRegistrationLinkToken(token, id);
   }
 }

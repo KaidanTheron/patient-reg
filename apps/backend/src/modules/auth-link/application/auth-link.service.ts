@@ -4,9 +4,11 @@ import { AuthLinkStatus } from "../domain/auth-link-status";
 import type { AuthLinkState } from "../domain/auth-link.types";
 import { AuthLinkRepository } from "../domain/ports/auth-link.repository";
 import { AuthLinkTokenSigner } from "../domain/ports/auth-link-token.signer";
+import { AuthLinkNotifier } from "../domain/ports/auth-link.notifier";
+import { AuthLinkFormatter } from "../domain/ports/auth-link.formatter";
+import { IdentityHasher } from "../../identity/domain/ports/identity.hasher";
 
 export type IssuedAuthLink = {
-  token: string;
   uuid: string;
   expiresAt: Date;
 };
@@ -21,25 +23,30 @@ export class AuthLinkService {
   constructor(
     private readonly authLinks: AuthLinkRepository,
     private readonly tokens: AuthLinkTokenSigner,
+    private readonly notifier: AuthLinkNotifier,
+    private readonly formatter: AuthLinkFormatter,
+    private readonly identityHasher: IdentityHasher,
   ) {}
 
   /**
    * Issues a new registration auth link JWT for the patient.
-   * Any other active links for the same patient are revoked so only one link is valid at a time.
    */
   async issueRegistrationLink(params: {
     patient: string;
     createdBy: string;
   }): Promise<IssuedAuthLink> {
-    await this.authLinks.revokeAllActiveForPatient(params.patient);
+    const { createdBy, patient } = params;
+    await this.authLinks.revokeAllActiveForPatient(patient);
     const expiresAt = new Date(Date.now() + AUTH_LINK_TTL_MS);
     const link = await this.authLinks.createNew({
-      patient: params.patient,
-      createdBy: params.createdBy,
+      patient,
+      createdBy,
       expiresAt,
     });
     const token = this.tokens.sign(link.uuid, link.expiresAt);
-    return { token, uuid: link.uuid, expiresAt: link.expiresAt };
+    const sendableLink = this.formatter.format(token);
+    await this.notifier.notify(patient, `Open ${sendableLink} in your browser`);
+    return { uuid: link.uuid, expiresAt: link.expiresAt }
   }
 
   /**
@@ -47,6 +54,7 @@ export class AuthLinkService {
    */
   async validateRegistrationLinkToken(
     token: string,
+    id: string,
   ): Promise<ValidatedAuthLink> {
     let linkUuid: string;
     try {
@@ -58,6 +66,12 @@ export class AuthLinkService {
     const link = await this.authLinks.findByUuid(linkUuid);
     if (!link) {
       throw new UnauthorizedException("Registration link not found");
+    }
+    const hashedId = await this.identityHasher.hash(id);
+    if (link.patient !== hashedId) {
+      throw new UnauthorizedException(
+        "Registration link does not match the provided identity",
+      );
     }
     if (link.status !== AuthLinkStatus.ACTIVE) {
       throw new UnauthorizedException("Registration link is no longer valid");
@@ -80,6 +94,10 @@ export class AuthLinkService {
       ...link,
       status: AuthLinkStatus.REVOKED,
     });
+  }
+
+  async revokeAllForPatient(patient: string): Promise<void> {
+    this.authLinks.revokeAllActiveForPatient(patient);
   }
 
   /**

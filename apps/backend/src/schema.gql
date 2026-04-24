@@ -4,7 +4,6 @@
 
 type AuthLinkIssuePayload {
   expiresAt: DateTime!
-  token: String!
   uuid: String!
 }
 
@@ -18,7 +17,7 @@ type Mutation {
 }
 
 type Query {
-  validateRegistrationLink(token: String!): ValidatedRegistrationLinkPayload!
+  validateRegistrationLink(id: String!, token: String!): ValidatedRegistrationLinkPayload!
 }
 
 type ValidatedRegistrationLinkPayload {
