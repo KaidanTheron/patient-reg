@@ -11,6 +11,12 @@ export const datasourceOptions: DataSourceOptions = {
     __dirname + '/../**/*.entity{.ts,.js}',
   ],
   synchronize: false,
+  migrationsRun: false,
+  migrations: [__dirname + "/../database/migrations/*.ts"],
+  migrationsTableName: "migrations",
+  extra: {
+    connectionLimit: env.DB_MAX_CONNECTIONS ?? 1,
+  }
 };
 
 const dataSource = new DataSource(datasourceOptions);

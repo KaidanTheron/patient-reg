@@ -14,6 +14,7 @@ const envSchema = z.object({
     DB_PORT: z.coerce.number().default(5432),
     DB_HOST: z.string().default("localhost"),
     DB_TYPE: z.enum(DBType).default(DBType.postgres),
+    DB_MAX_CONNECTIONS: z.coerce.number().optional(),
     SECRET: z.string().default("supersecretsecretkey"),
 })
 
