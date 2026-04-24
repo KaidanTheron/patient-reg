@@ -1,0 +1,1 @@
+Use boilerplate script new-module.js to reduce LLM usage costs.
