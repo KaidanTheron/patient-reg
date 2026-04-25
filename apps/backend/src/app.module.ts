@@ -1,12 +1,11 @@
 import { Module } from "@nestjs/common";
 import { GraphQLModule } from "@nestjs/graphql";
 import { ApolloDriverConfig } from "@nestjs/apollo";
-import { AuthLinkModule } from "./modules/auth-link/auth-link.module";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { datasourceOptions } from "./config/database.config";
 import { ConfigModule } from "@nestjs/config";
 import { graphqlOptions } from "./config/graphql.config";
-import { IdentityModule } from './modules/identity/identity.module';
+import { RegistrationModule } from './modules/registration/registration.module';
 
 @Module({
   imports: [
@@ -15,8 +14,7 @@ import { IdentityModule } from './modules/identity/identity.module';
       isGlobal: true,
     }),
     TypeOrmModule.forRoot(datasourceOptions),
-    AuthLinkModule,
-    IdentityModule,
+    RegistrationModule,
   ],
 })
 export class AppModule {}
