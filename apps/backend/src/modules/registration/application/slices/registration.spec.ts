@@ -1,5 +1,11 @@
 import { Practice } from "../../domain/entities/practice.entity";
 import {
+  type DraftRegistrationDocument,
+  RegistrationDocument,
+  UpdateRegistrationDocument,
+} from "../../domain/entities/registration-document.entity";
+import { ContactDetails } from "../../domain/value-objects/contact-details";
+import {
   DraftPatientPractice,
   PatientPractice,
 } from "../../domain/entities/patient-practice.entity";
@@ -24,13 +30,21 @@ import {
   RegistrationLinkTokenPayload,
   RegistrationLinkTokenSigner,
 } from "../../domain/ports/registration-link-token.signer";
+import {
+  type PatientSessionTokenPayload,
+  PatientSessionTokenSigner,
+  PATIENT_SESSION_TOKEN_TYPE,
+} from "../../domain/ports/patient-session-token.signer";
+import { MAX_ATTEMPTS } from "../../domain/constants/registration-link.constants";
 import { RegistrationLinkRepository } from "../../domain/ports/registration-link.repository";
 import { RegistrationRequestRepository } from "../../domain/ports/registration-request.repository";
+import { RegistrationDocumentRepository } from "../../domain/ports/registration-document.repository";
 import { PatientIdentity } from "../../domain/entities/patient-identity.entity";
 import { EncryptedValue } from "../../domain/value-objects/encrypted-value";
 import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
 import { RegistrationLinkStatus } from "../../domain/value-objects/registration-link-status";
 import { RegistrationStatus } from "../../domain/value-objects/registration-status";
+import { ProtectedPatientSession } from "../support/protected-patient-session";
 import { RegistrationService } from "./registration";
 
 class InMemoryRegistrationRequestRepository extends RegistrationRequestRepository {
@@ -62,6 +76,14 @@ class InMemoryRegistrationRequestRepository extends RegistrationRequestRepositor
   ): Promise<RegistrationRequest[]> {
     return [...this.requests.values()]
       .filter((request) => request.practiceId === practiceId)
+      .sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  }
+
+  async findAllByPatientIdentity(
+    patient: RegistrationRequest["patientIdentityId"],
+  ): Promise<RegistrationRequest[]> {
+    return [...this.requests.values()]
+      .filter((request) => request.patientIdentityId.equals(patient))
       .sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
   }
 
@@ -207,6 +229,55 @@ class InMemoryPracticeRepository extends PracticeRepository {
   }
 }
 
+class InMemoryRegistrationDocumentRepository extends RegistrationDocumentRepository {
+  readonly byId = new Map<string, RegistrationDocument>();
+  private nextId = 1;
+
+  async findByRegistrationRequestId(
+    registrationRequestId: string,
+  ): Promise<RegistrationDocument | null> {
+    return (
+      [...this.byId.values()].find(
+        (d) => d.registrationRequestId === registrationRequestId,
+      ) ?? null
+    );
+  }
+
+  async create(
+    document: DraftRegistrationDocument,
+  ): Promise<RegistrationDocument> {
+    const id = `doc-${this.nextId++}`;
+    const created = new RegistrationDocument(
+      id,
+      document.registrationRequestId,
+      document.patientIdentityId,
+      document.contactDetails,
+      new Date(0),
+    );
+    this.byId.set(id, created);
+    return created;
+  }
+
+  async update(
+    id: string,
+    update: UpdateRegistrationDocument,
+  ): Promise<RegistrationDocument> {
+    const existing = this.byId.get(id);
+    if (!existing) {
+      throw new Error("not found");
+    }
+    const next = new RegistrationDocument(
+      id,
+      existing.registrationRequestId,
+      existing.patientIdentityId,
+      update.contactDetails,
+      update.submittedAt,
+    );
+    this.byId.set(id, next);
+    return next;
+  }
+}
+
 class InMemoryPatientPracticeRepository extends PatientPracticeRepository {
   /**
    * Key: `${hashedIdentity}|${practiceId}` for idempotent `ensureLinked`.
@@ -260,6 +331,9 @@ class FakeRegistrationLinkTokenSigner extends RegistrationLinkTokenSigner {
   }
 
   verify(token: string): RegistrationLinkTokenPayload {
+    if (!token.startsWith("token:")) {
+      throw new Error("Invalid link token");
+    }
     return { registrationLinkId: token.replace("token:", "") };
   }
 }
@@ -267,6 +341,22 @@ class FakeRegistrationLinkTokenSigner extends RegistrationLinkTokenSigner {
 class FakeRegistrationLinkFormatter extends RegistrationLinkFormatter {
   format(token: string): string {
     return `https://patient-reg.test/registration/${token}`;
+  }
+}
+
+class FakePatientSessionTokenSigner extends PatientSessionTokenSigner {
+  sign(params: { registrationLinkId: string; expiresAt: Date }): string {
+    return `sess:${params.registrationLinkId}`;
+  }
+
+  verify(token: string): PatientSessionTokenPayload {
+    if (!token.startsWith("sess:")) {
+      throw new Error("Invalid session token");
+    }
+    return {
+      registrationLinkId: token.replace("sess:", ""),
+      typ: PATIENT_SESSION_TOKEN_TYPE,
+    };
   }
 }
 
@@ -281,7 +371,10 @@ describe("RegistrationService", () => {
   let notifier: SpyNotifier;
   let tokenSigner: FakeRegistrationLinkTokenSigner;
   let encrypter: TestEncrypter;
+  let sessionSigner: FakePatientSessionTokenSigner;
   let patientPractices: InMemoryPatientPracticeRepository;
+  let registrationDocuments: InMemoryRegistrationDocumentRepository;
+  let protectedPatientSession: ProtectedPatientSession;
   let service: RegistrationService;
 
   beforeEach(() => {
@@ -293,20 +386,29 @@ describe("RegistrationService", () => {
     practices = new InMemoryPracticeRepository();
     practices.practices.set("practice-1", Practice.create("practice-1", "GP"));
     patientPractices = new InMemoryPatientPracticeRepository();
+    registrationDocuments = new InMemoryRegistrationDocumentRepository();
     notifier = new SpyNotifier();
     tokenSigner = new FakeRegistrationLinkTokenSigner();
     encrypter = new TestEncrypter();
+    sessionSigner = new FakePatientSessionTokenSigner();
+    protectedPatientSession = new ProtectedPatientSession(
+      sessionSigner,
+      registrationLinks,
+    );
     service = new RegistrationService(
       registrationRequests,
       registrationLinks,
       patientIdentities,
       practices,
       patientPractices,
+      registrationDocuments,
       notifier,
       new DeterministicHasher(),
       encrypter,
       tokenSigner,
+      sessionSigner,
       new FakeRegistrationLinkFormatter(),
+      protectedPatientSession,
     );
   });
 
@@ -349,11 +451,14 @@ describe("RegistrationService", () => {
       patientIdentities,
       practices,
       patientPractices,
+      registrationDocuments,
       notifier,
       new DeterministicHasher(),
       encrypter,
       tokenSigner,
+      sessionSigner,
       new FakeRegistrationLinkFormatter(),
+      protectedPatientSession,
     );
 
     await expect(
@@ -467,7 +572,10 @@ describe("RegistrationService", () => {
     registrationRequests.requests.set(older.id, older);
     registrationRequests.requests.set(newer.id, newer);
     registrationRequests.requests.set(otherPractice.id, otherPractice);
-    practices.practices.set("practice-2", Practice.create("practice-2", "Other"));
+    practices.practices.set(
+      "practice-2",
+      Practice.create("practice-2", "Other"),
+    );
 
     const list = await service.findAllPracticeRegRequests("practice-1");
 
@@ -484,5 +592,400 @@ describe("RegistrationService", () => {
     await expect(
       service.findAllPracticeRegRequests("no-such-practice"),
     ).rejects.toThrow("Practice not found.");
+  });
+
+  it("findRegistrationRequestsForPatientSession: throws on invalid session token", async () => {
+    await expect(service.findAllPatientRegRequests("not-sess")).rejects.toThrow(
+      "Invalid session token",
+    );
+  });
+
+  it("findRegistrationRequestsForPatientSession: throws when link row is missing", async () => {
+    await expect(
+      service.findAllPatientRegRequests("sess:orphan-id"),
+    ).rejects.toThrow("Invalid or stale session");
+  });
+
+  it("findRegistrationRequestsForPatientSession: returns requests for patient on link", async () => {
+    placeRegistrationLink("lnk-patient-list");
+    const patient = HashedRsaId.fromPersisted(hashedRsaId);
+    const r1 = new RegistrationRequest(
+      "req-mr-1",
+      patient,
+      "practice-1",
+      RegistrationStatus.awaitingCompletion(),
+    );
+    const r2 = new RegistrationRequest(
+      "req-mr-2",
+      patient,
+      "practice-2",
+      RegistrationStatus.rejected(),
+      "bad",
+    );
+    registrationRequests.requests.set(r1.id, r1);
+    registrationRequests.requests.set(r2.id, r2);
+    practices.practices.set("practice-2", Practice.create("practice-2", "P2"));
+
+    const list = await service.findAllPatientRegRequests(
+      "sess:lnk-patient-list",
+    );
+    expect(list).toHaveLength(2);
+    expect(list).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          registrationRequestId: "req-mr-1",
+          registrationRequestStatus: "AWAITING_COMPLETION",
+        }),
+        expect.objectContaining({
+          registrationRequestId: "req-mr-2",
+          registrationRequestStatus: "REJECTED",
+          rejectionReason: "bad",
+        }),
+      ]),
+    );
+  });
+
+  function placeRegistrationLink(
+    id: string,
+    opts: {
+      expired?: boolean;
+      revoked?: boolean;
+      attempts?: number;
+      patient?: HashedRsaId;
+    } = {},
+  ): RegistrationLink {
+    const patient = opts.patient ?? HashedRsaId.fromPersisted(hashedRsaId);
+    const expiresAt = opts.expired
+      ? new Date(Date.now() - 10_000)
+      : new Date(Date.now() + 60_000);
+    const status = opts.revoked
+      ? RegistrationLinkStatus.revoked()
+      : RegistrationLinkStatus.active();
+    const link = new RegistrationLink(
+      id,
+      status,
+      expiresAt,
+      patient,
+      "staff-1",
+      opts.attempts ?? 0,
+      MAX_ATTEMPTS,
+    );
+    registrationLinks.links.set(id, link);
+    return link;
+  }
+
+  it("submits a registration document and sets status to AWAITING_REVIEW", async () => {
+    placeRegistrationLink("doc-submit-1");
+    const patient = HashedRsaId.fromPersisted(hashedRsaId);
+    const req = new RegistrationRequest(
+      "req-doc-1",
+      patient,
+      "practice-1",
+      RegistrationStatus.awaitingCompletion(),
+    );
+    registrationRequests.requests.set(req.id, req);
+
+    const out = await service.submitRegistrationDocument({
+      sessionToken: "sess:doc-submit-1",
+      registrationRequestId: req.id,
+      rsaId: rawRsaId,
+      email: "me@mail.test",
+      phoneNumber: "0820000000",
+      residentialAddress: "1 Example Rd",
+    });
+
+    expect(out).toEqual({
+      registrationRequestId: "req-doc-1",
+      registrationRequestStatus: "AWAITING_REVIEW",
+    });
+    expect(req.getStatus().toString()).toBe("AWAITING_REVIEW");
+    expect(registrationDocuments.byId.size).toBe(1);
+  });
+
+  it("rejects submission when the registration request is missing", async () => {
+    placeRegistrationLink("doc-orphan");
+    await expect(
+      service.submitRegistrationDocument({
+        sessionToken: "sess:doc-orphan",
+        registrationRequestId: "nonexistent",
+        rsaId: rawRsaId,
+        email: "a@b.c",
+        phoneNumber: "1",
+        residentialAddress: "a",
+      }),
+    ).rejects.toThrow("Registration request not found");
+  });
+
+  it("rejects submission when the RSA ID does not match the request", async () => {
+    const otherPatient = HashedRsaId.fromPersisted("hashed:other-id");
+    placeRegistrationLink("doc-other", { patient: otherPatient });
+    const req = new RegistrationRequest(
+      "req-doc-2",
+      otherPatient,
+      "practice-1",
+      RegistrationStatus.awaitingCompletion(),
+    );
+    registrationRequests.requests.set(req.id, req);
+
+    await expect(
+      service.submitRegistrationDocument({
+        sessionToken: "sess:doc-other",
+        registrationRequestId: req.id,
+        rsaId: rawRsaId,
+        email: "a@b.c",
+        phoneNumber: "1",
+        residentialAddress: "a",
+      }),
+    ).rejects.toThrow(
+      "The identity number does not match this registration request",
+    );
+  });
+
+  it("updates the registration document when resubmitting after rejection", async () => {
+    placeRegistrationLink("doc-resubmit");
+    const patient = HashedRsaId.fromPersisted(hashedRsaId);
+    const req = new RegistrationRequest(
+      "req-doc-3",
+      patient,
+      "practice-1",
+      RegistrationStatus.rejected(),
+      "Incomplete",
+    );
+    registrationRequests.requests.set(req.id, req);
+    registrationDocuments.byId.set(
+      "doc-1",
+      new RegistrationDocument(
+        "doc-1",
+        "req-doc-3",
+        patient,
+        ContactDetails.create({
+          email: "old@e.test",
+          phoneNumber: "1",
+          residentialAddress: "old",
+        }),
+        new Date(0),
+      ),
+    );
+
+    await service.submitRegistrationDocument({
+      sessionToken: "sess:doc-resubmit",
+      registrationRequestId: "req-doc-3",
+      rsaId: rawRsaId,
+      email: "new@e.test",
+      phoneNumber: "082",
+      residentialAddress: "2 New St",
+    });
+
+    const doc =
+      (await registrationDocuments.findByRegistrationRequestId("req-doc-3"))!;
+    expect(doc.contactDetails.email).toBe("new@e.test");
+    const stored = await registrationRequests.findById("req-doc-3");
+    expect(stored?.getStatus().toString()).toBe("AWAITING_REVIEW");
+  });
+
+  it("does not allow submission from AWAITING_REVIEW (already submitted)", async () => {
+    placeRegistrationLink("doc-state");
+    const patient = HashedRsaId.fromPersisted(hashedRsaId);
+    const req = new RegistrationRequest(
+      "req-doc-4",
+      patient,
+      "practice-1",
+      RegistrationStatus.awaitingReview(),
+    );
+    registrationRequests.requests.set(req.id, req);
+
+    await expect(
+      service.submitRegistrationDocument({
+        sessionToken: "sess:doc-state",
+        registrationRequestId: req.id,
+        rsaId: rawRsaId,
+        email: "a@b.c",
+        phoneNumber: "1",
+        residentialAddress: "a",
+      }),
+    ).rejects.toThrow("Cannot submit registration in current state");
+  });
+
+  it("rejects document submission on invalid session token", async () => {
+    const patient = HashedRsaId.fromPersisted(hashedRsaId);
+    const req = new RegistrationRequest(
+      "req-doc-sess-1",
+      patient,
+      "practice-1",
+      RegistrationStatus.awaitingCompletion(),
+    );
+    registrationRequests.requests.set(req.id, req);
+
+    await expect(
+      service.submitRegistrationDocument({
+        sessionToken: "not-sess",
+        registrationRequestId: req.id,
+        rsaId: rawRsaId,
+        email: "a@b.c",
+        phoneNumber: "1",
+        residentialAddress: "a",
+      }),
+    ).rejects.toThrow("Invalid session token");
+  });
+
+  it("rejects document submission when the session link row is missing", async () => {
+    const patient = HashedRsaId.fromPersisted(hashedRsaId);
+    const req = new RegistrationRequest(
+      "req-doc-sess-2",
+      patient,
+      "practice-1",
+      RegistrationStatus.awaitingCompletion(),
+    );
+    registrationRequests.requests.set(req.id, req);
+
+    await expect(
+      service.submitRegistrationDocument({
+        sessionToken: "sess:missing-link-row",
+        registrationRequestId: req.id,
+        rsaId: rawRsaId,
+        email: "a@b.c",
+        phoneNumber: "1",
+        residentialAddress: "a",
+      }),
+    ).rejects.toThrow("Invalid or stale session");
+  });
+
+  it("rejects document submission when session does not match the request patient", async () => {
+    const otherPatient = HashedRsaId.fromPersisted("hashed:other-id");
+    placeRegistrationLink("doc-wrong-patient", { patient: otherPatient });
+    const req = new RegistrationRequest(
+      "req-doc-sess-3",
+      HashedRsaId.fromPersisted(hashedRsaId),
+      "practice-1",
+      RegistrationStatus.awaitingCompletion(),
+    );
+    registrationRequests.requests.set(req.id, req);
+
+    await expect(
+      service.submitRegistrationDocument({
+        sessionToken: "sess:doc-wrong-patient",
+        registrationRequestId: req.id,
+        rsaId: rawRsaId,
+        email: "a@b.c",
+        phoneNumber: "1",
+        residentialAddress: "a",
+      }),
+    ).rejects.toThrow("Session is not valid for this registration request");
+  });
+
+  it("verifyRegistration: fails when the registration link does not exist", async () => {
+    const r = await service.verifyRegistration({
+      registrationLinkId: "missing",
+      rsaId: rawRsaId,
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.errorCode).toBe("REGISTRATION_LINK_NOT_FOUND");
+      expect(r.maxAttempts).toBe(MAX_ATTEMPTS);
+    }
+  });
+
+  it("verifyRegistration: fails for a revoked or expired link without recording attempts", async () => {
+    placeRegistrationLink("rv", { revoked: true });
+    const r0 = await service.verifyRegistration({
+      registrationLinkId: "rv",
+      rsaId: rawRsaId,
+    });
+    expect(r0).toMatchObject({ success: false, errorCode: "LINK_REVOKED" });
+
+    placeRegistrationLink("ex", { expired: true });
+    const r1 = await service.verifyRegistration({
+      registrationLinkId: "ex",
+      rsaId: rawRsaId,
+    });
+    expect(r1).toMatchObject({ success: false, errorCode: "EXPIRED" });
+  });
+
+  it("verifyRegistration: records a failed attempt on identity mismatch", async () => {
+    placeRegistrationLink("m1", {
+      patient: HashedRsaId.fromPersisted("hashed:someone-else"),
+    });
+    const r = await service.verifyRegistration({
+      registrationLinkId: "m1",
+      rsaId: rawRsaId,
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.errorCode).toBe("IDENTITY_MISMATCH");
+      expect(r.attemptsAfterFailure).toBe(1);
+    }
+    const after = (await registrationLinks.findById("m1"))!;
+    expect(after.getAttempts()).toBe(1);
+  });
+
+  it("verifyRegistration: returns ATTEMPTS_EXHAUSTED on the last failed try", async () => {
+    placeRegistrationLink("m2", {
+      attempts: MAX_ATTEMPTS - 1,
+      patient: HashedRsaId.fromPersisted("hashed:other"),
+    });
+    const r = await service.verifyRegistration({
+      registrationLinkId: "m2",
+      rsaId: rawRsaId,
+    });
+    expect(r).toMatchObject({
+      success: false,
+      errorCode: "ATTEMPTS_EXHAUSTED",
+    });
+  });
+
+  it("verifyRegistration: issues a session token and revokes the link on success", async () => {
+    placeRegistrationLink("ok1");
+    const r = await service.verifyRegistration({
+      registrationLinkId: "ok1",
+      rsaId: rawRsaId,
+    });
+    if (!r.success) {
+      throw new Error("expected success");
+    }
+    expect(r.sessionToken).toBe("sess:ok1");
+    expect(r.registrationLinkId).toBe("ok1");
+    const link = (await registrationLinks.findById("ok1"))!;
+    expect(link.getStatus().toString()).toBe("REVOKED");
+  });
+
+  it("verifyRegistration: allows success after two failed mismatches when the ID is then correct", async () => {
+    const otherValidRsa = "8501010000049";
+    placeRegistrationLink("ok2");
+    await service.verifyRegistration({
+      registrationLinkId: "ok2",
+      rsaId: otherValidRsa,
+    });
+    await service.verifyRegistration({
+      registrationLinkId: "ok2",
+      rsaId: otherValidRsa,
+    });
+    const r = await service.verifyRegistration({
+      registrationLinkId: "ok2",
+      rsaId: rawRsaId,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("verifyRegistrationByLinkToken: returns INVALID_LINK_TOKEN for a bad token", async () => {
+    const r = await service.verifyRegistrationByLinkToken({
+      token: "not-a-valid-token",
+      rsaId: rawRsaId,
+    });
+    expect(r).toMatchObject({
+      success: false,
+      errorCode: "INVALID_LINK_TOKEN",
+    });
+  });
+
+  it("verifyRegistrationByLinkToken: resolves the link from the token and succeeds", async () => {
+    placeRegistrationLink("vbt1");
+    const r = await service.verifyRegistrationByLinkToken({
+      token: "token:vbt1",
+      rsaId: rawRsaId,
+    });
+    if (!r.success) {
+      throw new Error("expected success");
+    }
+    expect(r.sessionToken).toBe("sess:vbt1");
   });
 });

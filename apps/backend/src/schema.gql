@@ -21,6 +21,8 @@ type Mutation {
   approveRegistration(input: ApproveRegistrationInput!): RegistrationRequestPayload!
   createPractice(input: CreatePracticeInput!): PracticePayload!
   initiateRegistration(input: InitiateRegistrationInput!): RegistrationRequestPayload!
+  submitRegistrationDocument(input: SubmitRegistrationDocumentInput!): RegistrationRequestPayload!
+  verifyRegistration(input: VerifyRegistrationInput!): VerifyRegistrationPayload!
 }
 
 type PracticePayload {
@@ -29,6 +31,7 @@ type PracticePayload {
 }
 
 type Query {
+  myRegistrationRequests(sessionToken: String!): [RegistrationRequestPayload!]!
   practice(id: String!): PracticePayload
   practiceRegistrationRequests(practiceId: String!): [RegistrationRequestPayload!]!
   practices: [PracticePayload!]!
@@ -38,4 +41,28 @@ type RegistrationRequestPayload {
   registrationRequestId: String!
   registrationRequestStatus: String!
   rejectionReason: String
+}
+
+input SubmitRegistrationDocumentInput {
+  email: String!
+  phoneNumber: String!
+  registrationRequestId: String!
+  residentialAddress: String!
+  rsaId: String!
+  sessionToken: String!
+}
+
+input VerifyRegistrationInput {
+  rsaId: String!
+  token: String!
+}
+
+type VerifyRegistrationPayload {
+  attemptsAfterFailure: Int
+  errorCode: String
+  expiresAt: String
+  maxAttempts: Int
+  registrationLinkId: String
+  sessionToken: String
+  success: Boolean!
 }

@@ -89,6 +89,23 @@ export class RegistrationLink {
         this.status = RegistrationLinkStatus.revoked();
     }
 
+    /**
+     * Counts a failed identity check (e.g. wrong ID entered). If attempts reach
+     * {@link maxAttempts}, the link is revoked. No-op if not active or already expired.
+     */
+    public recordFailedIdentityVerification(now = new Date()): void {
+        if (!this.getStatus().equals(RegistrationLinkStatus.active())) {
+            return;
+        }
+        if (this.isExpired(now)) {
+            return;
+        }
+        this.attempts += 1;
+        if (this.attempts >= this.maxAttempts) {
+            this.revoke();
+        }
+    }
+
     public consume(consumedBy: HashedRsaId, now = new Date()): void {
         if (!this.canBeUsed(consumedBy, now)) {
             throw new Error("Registration link is no longer valid");

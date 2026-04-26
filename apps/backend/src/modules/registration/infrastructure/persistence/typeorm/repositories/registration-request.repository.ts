@@ -81,15 +81,31 @@ export class RegistrationRequestRepository extends Repository {
     return entities.map((entity) => this.toDomain(entity));
   }
 
+  public async findAllByPatientIdentity(
+    patient: RegistrationRequest["patientIdentityId"],
+  ): Promise<RegistrationRequest[]> {
+    const entities = await this.repo.find({
+      where: { patientIdentity: { identity: patient.toString() } },
+      relations: RegistrationRequestRepository.withPatientAndPractice,
+      order: { createdAt: "DESC" },
+    });
+    return entities.map((entity) => this.toDomain(entity));
+  }
+
   public async update(
     id: RegistrationRequest["id"],
     request: Partial<UpdateRegistrationRequest>,
   ): Promise<void> {
-    const payload: Partial<RegistrationRequestEntity> = {
-      status: request.status?.toString(),
-      rejectionReason: request.rejectionReason,
-    };
-
+    const payload: Partial<RegistrationRequestEntity> = {};
+    if (request.status !== undefined) {
+      payload.status = request.status.toString() as RegistrationRequestEntity["status"];
+    }
+    if (request.rejectionReason !== undefined) {
+      payload.rejectionReason = request.rejectionReason;
+    }
+    if (Object.keys(payload).length === 0) {
+      return;
+    }
     await this.repo.update({ id }, payload);
   }
 

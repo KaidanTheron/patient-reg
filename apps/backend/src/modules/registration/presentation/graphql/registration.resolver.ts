@@ -8,6 +8,9 @@ import {
   InitiateRegistrationInput,
   PracticePayload,
   RegistrationRequestPayload,
+  SubmitRegistrationDocumentInput,
+  VerifyRegistrationInput,
+  VerifyRegistrationPayload,
 } from "./registration.models";
 
 @Resolver()
@@ -42,6 +45,46 @@ export class RegistrationResolver {
     return this.registration.approveRegistration(input);
   }
 
+  // TODO: should get registrationRequestId from context from guard
+  // Do not implement yet
+  @Mutation(() => RegistrationRequestPayload)
+  async submitRegistrationDocument(
+    @Args("input") input: SubmitRegistrationDocumentInput,
+  ): Promise<RegistrationRequestPayload> {
+    return this.registration.submitRegistrationDocument({
+      sessionToken: input.sessionToken,
+      registrationRequestId: input.registrationRequestId,
+      rsaId: input.rsaId,
+      email: input.email,
+      phoneNumber: input.phoneNumber,
+      residentialAddress: input.residentialAddress,
+    });
+  }
+
+  @Mutation(() => VerifyRegistrationPayload)
+  async verifyRegistration(
+    @Args("input") input: VerifyRegistrationInput,
+  ): Promise<VerifyRegistrationPayload> {
+    const r = await this.registration.verifyRegistrationByLinkToken({
+      token: input.token,
+      rsaId: input.rsaId,
+    });
+    if (r.success) {
+      return {
+        success: true,
+        sessionToken: r.sessionToken,
+        expiresAt: r.expiresAt,
+        registrationLinkId: r.registrationLinkId,
+      };
+    }
+    return {
+      success: false,
+      errorCode: r.errorCode,
+      maxAttempts: r.maxAttempts,
+      attemptsAfterFailure: r.attemptsAfterFailure,
+    };
+  }
+
   @Query(() => PracticePayload, { nullable: true })
   async practice(@Args("id") id: string): Promise<PracticePayload | null> {
     return this.registration.findPracticeById(id);
@@ -57,5 +100,14 @@ export class RegistrationResolver {
     @Args("practiceId") practiceId: string,
   ): Promise<RegistrationRequestPayload[]> {
     return this.registration.findAllPracticeRegRequests(practiceId);
+  }
+
+  @Query(() => [RegistrationRequestPayload])
+  async myRegistrationRequests(
+    @Args("sessionToken") sessionToken: string,
+  ): Promise<RegistrationRequestPayload[]> {
+    return this.registration.findAllPatientRegRequests(
+      sessionToken,
+    );
   }
 }

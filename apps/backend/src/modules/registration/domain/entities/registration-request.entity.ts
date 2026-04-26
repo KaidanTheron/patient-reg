@@ -23,7 +23,7 @@ export class DraftRegistrationRequest {
 export class UpdateRegistrationRequest {
   constructor(
     public readonly status: RegistrationStatus,
-    public readonly rejectionReason?: string,
+    public readonly rejectionReason: string | null = null,
   ) {}
 }
 

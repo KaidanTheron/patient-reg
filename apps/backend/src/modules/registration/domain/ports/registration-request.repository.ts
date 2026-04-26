@@ -10,6 +10,10 @@ export abstract class RegistrationRequestRepository {
     practiceId: Practice["id"],
   ): Promise<RegistrationRequest[]>;
 
+  abstract findAllByPatientIdentity(
+    patient: RegistrationRequest["patientIdentityId"],
+  ): Promise<RegistrationRequest[]>;
+
   abstract create(request: DraftRegistrationRequest): Promise<RegistrationRequest>;
 
   abstract update(id: RegistrationRequest["id"], request: Partial<UpdateRegistrationRequest>): Promise<void>;

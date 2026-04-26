@@ -12,9 +12,9 @@ export class RegistrationStatePolicy {
         const { status, currentPatientId, targetPatientId } = params;
 
         return (
-            targetPatientId === currentPatientId &&
-            status.equals(RegistrationStatus.awaitingCompletion()) ||
-            status.equals(RegistrationStatus.rejected())
+            currentPatientId.equals(targetPatientId) &&
+            (status.equals(RegistrationStatus.awaitingCompletion()) ||
+                status.equals(RegistrationStatus.rejected()))
         );
     }
 

@@ -16,7 +16,7 @@ export class RegistrationLinkPolicy {
     return (
       params.status.equals(RegistrationLinkStatus.active()) &&
       params.current.equals(params.target) &&
-      params.attempts <= params.maxAttempts &&
+      params.attempts < params.maxAttempts &&
       params.expiresAt.getTime() > now.getTime()
     );
   }
