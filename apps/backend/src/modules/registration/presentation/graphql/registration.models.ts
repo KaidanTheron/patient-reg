@@ -39,13 +39,7 @@ export class ApproveRegistrationInput {
 @InputType()
 export class SubmitRegistrationDocumentInput {
   @Field()
-  sessionToken: string;
-
-  @Field()
   registrationRequestId: string;
-
-  @Field()
-  rsaId: string;
 
   @Field()
   email: string;

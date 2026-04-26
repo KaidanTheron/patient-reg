@@ -30,6 +30,7 @@ import { RegistrationRequestRepository as TypeOrmRegistrationRequestRepository }
 import { TypeOrmRegistrationLinkRepository } from "./infrastructure/persistence/typeorm/repositories/registration-link.repository";
 import { TypeOrmRegistrationDocumentRepository } from "./infrastructure/persistence/typeorm/repositories/registration-document.repository";
 import { RegistrationResolver } from "./presentation/graphql/registration.resolver";
+import { PatientSessionGuard } from "./presentation/graphql/patient-session.guard";
 import { Notifier } from "./domain/ports/notifier";
 import { ConsoleNotifier } from "./infrastructure/transport/console-notifier";
 import { StringRegistrationLinkFormatter } from "./infrastructure/transport/string-registration-link.formatter";
@@ -47,6 +48,7 @@ import { StringRegistrationLinkFormatter } from "./infrastructure/transport/stri
   ],
   providers: [
     ProtectedPatientSession,
+    PatientSessionGuard,
     RegistrationService,
     RegistrationResolver,
     { provide: Hasher, useClass: CryptoHasher },

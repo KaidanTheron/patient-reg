@@ -1,7 +1,9 @@
+import { UseGuards } from "@nestjs/common";
 import { Args, Mutation, Query, Resolver } from "@nestjs/graphql";
-import {
-  RegistrationService,
-} from "../../application/slices/registration";
+import { RegistrationService } from "../../application/slices/registration";
+import type { VerifiedPatientSession } from "../../application/support/protected-patient-session";
+import { PatientSession } from "./patient-session.context";
+import { PatientSessionGuard } from "./patient-session.guard";
 import {
   ApproveRegistrationInput,
   CreatePracticeInput,
@@ -15,9 +17,7 @@ import {
 
 @Resolver()
 export class RegistrationResolver {
-  constructor(
-    private readonly registration: RegistrationService,
-  ) {}
+  constructor(private readonly registration: RegistrationService) {}
 
   @Mutation(() => PracticePayload)
   async createPractice(
@@ -30,7 +30,6 @@ export class RegistrationResolver {
   async initiateRegistration(
     @Args("input") input: InitiateRegistrationInput,
   ): Promise<RegistrationRequestPayload> {
-
     return this.registration.initiateRegistration({
       patientIdentityId: input.rsaId,
       practiceId: input.practiceId,
@@ -48,13 +47,14 @@ export class RegistrationResolver {
   // TODO: should get registrationRequestId from context from guard
   // Do not implement yet
   @Mutation(() => RegistrationRequestPayload)
+  @UseGuards(PatientSessionGuard)
   async submitRegistrationDocument(
     @Args("input") input: SubmitRegistrationDocumentInput,
+    @PatientSession() patientSession: VerifiedPatientSession,
   ): Promise<RegistrationRequestPayload> {
     return this.registration.submitRegistrationDocument({
-      sessionToken: input.sessionToken,
+      patientSession,
       registrationRequestId: input.registrationRequestId,
-      rsaId: input.rsaId,
       email: input.email,
       phoneNumber: input.phoneNumber,
       residentialAddress: input.residentialAddress,
@@ -103,11 +103,10 @@ export class RegistrationResolver {
   }
 
   @Query(() => [RegistrationRequestPayload])
+  @UseGuards(PatientSessionGuard)
   async myRegistrationRequests(
-    @Args("sessionToken") sessionToken: string,
+    @PatientSession() patientSession: VerifiedPatientSession,
   ): Promise<RegistrationRequestPayload[]> {
-    return this.registration.findAllPatientRegRequests(
-      sessionToken,
-    );
+    return this.registration.findAllPatientRegRequests(patientSession);
   }
 }

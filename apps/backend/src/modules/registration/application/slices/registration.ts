@@ -33,7 +33,10 @@ import {
   UpdateRegistrationDocument,
 } from "../../domain/entities/registration-document.entity";
 import { ContactDetails } from "../../domain/value-objects/contact-details";
-import { ProtectedPatientSession } from "../support/protected-patient-session";
+import {
+  ProtectedPatientSession,
+  type VerifiedPatientSession,
+} from "../support/protected-patient-session";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -69,11 +72,13 @@ export type DeriveDataCommand = {
   patientIdentityId: string;
 };
 
+/**
+ * `patientSession` must be produced by {@link ProtectedPatientSession} (e.g. GraphQL
+ * `PatientSessionGuard` + `@PatientSession()`), not a raw token string.
+ */
 export type SubmitRegistrationDocumentCommand = {
-  /** Patient session JWT (same family as `myRegistrationRequests`). */
-  sessionToken: string;
+  patientSession: VerifiedPatientSession;
   registrationRequestId: string;
-  rsaId: string;
   email: string;
   phoneNumber: string;
   residentialAddress: string;
@@ -294,98 +299,86 @@ export class RegistrationService {
    * the session JWT and `RegistrationLinkRepository.findById`.
    */
   async findAllPatientRegRequests(
-    sessionToken: string,
+    session: string | VerifiedPatientSession,
   ): Promise<RegistrationRequestListItem[]> {
-    return this.protectedPatientSession.run(
-      sessionToken,
-      async ({ patientIdentityId }) => {
-        const requests =
-          await this.registrationRequests.findAllByPatientIdentity(
-            patientIdentityId,
-          );
-        return requests.map((request) => {
-          const rejectionReason = request.getRejectionReason();
-          return {
-            registrationRequestId: request.id,
-            registrationRequestStatus: request.getStatus().toString(),
-            rejectionReason,
-          };
-        });
-      },
+    const patientSession =
+      typeof session === "string"
+        ? await this.protectedPatientSession.verify(session)
+        : session;
+    const requests = await this.registrationRequests.findAllByPatientIdentity(
+      patientSession.patientIdentityId,
     );
+    return requests.map((request) => {
+      const rejectionReason = request.getRejectionReason();
+      return {
+        registrationRequestId: request.id,
+        registrationRequestStatus: request.getStatus().toString(),
+        rejectionReason,
+      };
+    });
   }
 
   /**
    * Stores submitted contact details, upserts the registration document,
    * and moves the request to {@link RegistrationStatus.awaitingReview} when
    * the patient identity and workflow state are valid.
+   *
+   * Callers must pass a {@link VerifiedPatientSession} from
+   * {@link ProtectedPatientSession} (e.g. patient session guard); this method
+   * does not accept a raw session token.
    */
   async submitRegistrationDocument(
     command: SubmitRegistrationDocumentCommand,
   ): Promise<SubmitRegistrationDocumentResult> {
-    return this.protectedPatientSession.run(
-      command.sessionToken,
-      async ({ patientIdentityId }) => {
-        const request = await this.registrationRequests.findById(
-          command.registrationRequestId,
-        );
-        if (!request) {
-          throw new Error("Registration request not found");
-        }
-        if (!patientIdentityId.equals(request.patientIdentityId)) {
-          throw new Error("Session is not valid for this registration request");
-        }
-
-        const identity = RsaIdNumber.create(command.rsaId);
-        const hashed = await HashedRsaId.create(identity, this.hasher);
-        const contact = ContactDetails.create({
-          email: command.email,
-          phoneNumber: command.phoneNumber,
-          residentialAddress: command.residentialAddress,
-        });
-
-        if (!request.patientIdentityId.equals(hashed)) {
-          throw new Error(
-            "The identity number does not match this registration request",
-          );
-        }
-
-        request.submit(hashed);
-
-        const existing =
-          await this.registrationDocuments.findByRegistrationRequestId(
-            request.id,
-          );
-        if (existing) {
-          const submittedAt = new Date();
-          await this.registrationDocuments.update(
-            existing.id,
-            new UpdateRegistrationDocument(contact, submittedAt),
-          );
-        } else {
-          await this.registrationDocuments.create(
-            new DraftRegistrationDocument(
-              request.id,
-              request.patientIdentityId,
-              contact,
-            ),
-          );
-        }
-
-        await this.registrationRequests.update(
-          request.id,
-          new UpdateRegistrationRequest(
-            request.getStatus(),
-            request.getRejectionReason() ?? null,
-          ),
-        );
-
-        return {
-          registrationRequestId: request.id,
-          registrationRequestStatus: request.getStatus().toString(),
-        };
-      },
+    const { patientIdentityId } = command.patientSession;
+    const request = await this.registrationRequests.findById(
+      command.registrationRequestId,
     );
+    if (!request) {
+      throw new Error("Registration request not found");
+    }
+    if (!patientIdentityId.equals(request.patientIdentityId)) {
+      throw new Error("Session is not valid for this registration request");
+    }
+
+    const contact = ContactDetails.create({
+      email: command.email,
+      phoneNumber: command.phoneNumber,
+      residentialAddress: command.residentialAddress,
+    });
+
+    request.submit(patientIdentityId);
+
+    const existing =
+      await this.registrationDocuments.findByRegistrationRequestId(request.id);
+    if (existing) {
+      const submittedAt = new Date();
+      await this.registrationDocuments.update(
+        existing.id,
+        new UpdateRegistrationDocument(contact, submittedAt),
+      );
+    } else {
+      await this.registrationDocuments.create(
+        new DraftRegistrationDocument(
+          request.id,
+          request.patientIdentityId,
+          contact,
+        ),
+      );
+    }
+
+    await this.registrationRequests.update(
+      request.id,
+      new UpdateRegistrationRequest(
+        request.getStatus(),
+        request.getRejectionReason() ?? null,
+      ),
+    );
+
+    return {
+      registrationRequestId: request.id,
+      registrationRequestStatus: request.getStatus().toString(),
+    };
   }
 
   // resends registration link for patient
@@ -503,12 +496,8 @@ export class RegistrationService {
     };
   }
 
-  deriveData(command: DeriveDataCommand) {
-    const { patientIdentityId: rawIdentity } = command;
-    const identity = RsaIdNumber.create(rawIdentity);
-
-    return identity.deriveDateOfBirth();
-  }
+  // gets patient data for a verified patient session
+//   async patient(): Patie
 
   private toPracticeResult(practice: Practice): PracticeResult {
     return {

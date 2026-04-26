@@ -31,7 +31,7 @@ type PracticePayload {
 }
 
 type Query {
-  myRegistrationRequests(sessionToken: String!): [RegistrationRequestPayload!]!
+  myRegistrationRequests: [RegistrationRequestPayload!]!
   practice(id: String!): PracticePayload
   practiceRegistrationRequests(practiceId: String!): [RegistrationRequestPayload!]!
   practices: [PracticePayload!]!
@@ -48,8 +48,6 @@ input SubmitRegistrationDocumentInput {
   phoneNumber: String!
   registrationRequestId: String!
   residentialAddress: String!
-  rsaId: String!
-  sessionToken: String!
 }
 
 input VerifyRegistrationInput {

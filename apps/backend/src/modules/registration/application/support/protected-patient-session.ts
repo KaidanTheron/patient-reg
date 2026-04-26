@@ -21,6 +21,11 @@ export class ProtectedPatientSession {
     sessionToken: string,
     handler: (session: VerifiedPatientSession) => Promise<T>,
   ): Promise<T> {
+    const session = await this.verify(sessionToken);
+    return handler(session);
+  }
+
+  async verify(sessionToken: string): Promise<VerifiedPatientSession> {
     const { registrationLinkId } =
       this.patientSessionTokenSigner.verify(sessionToken);
     const link = await this.registrationLinks.findById(registrationLinkId);
@@ -29,10 +34,10 @@ export class ProtectedPatientSession {
       throw new Error("Invalid or stale session");
     }
 
-    return handler({
+    return {
       registrationLinkId: link.id,
       patientIdentityId: link.patient,
       registrationLink: link,
-    });
+    };
   }
 }

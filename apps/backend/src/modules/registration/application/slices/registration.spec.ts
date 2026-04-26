@@ -676,6 +676,9 @@ describe("RegistrationService", () => {
 
   it("submits a registration document and sets status to AWAITING_REVIEW", async () => {
     placeRegistrationLink("doc-submit-1");
+    const patientSession = await protectedPatientSession.verify(
+      "sess:doc-submit-1",
+    );
     const patient = HashedRsaId.fromPersisted(hashedRsaId);
     const req = new RegistrationRequest(
       "req-doc-1",
@@ -686,9 +689,8 @@ describe("RegistrationService", () => {
     registrationRequests.requests.set(req.id, req);
 
     const out = await service.submitRegistrationDocument({
-      sessionToken: "sess:doc-submit-1",
+      patientSession,
       registrationRequestId: req.id,
-      rsaId: rawRsaId,
       email: "me@mail.test",
       phoneNumber: "0820000000",
       residentialAddress: "1 Example Rd",
@@ -704,11 +706,13 @@ describe("RegistrationService", () => {
 
   it("rejects submission when the registration request is missing", async () => {
     placeRegistrationLink("doc-orphan");
+    const patientSession = await protectedPatientSession.verify(
+      "sess:doc-orphan",
+    );
     await expect(
       service.submitRegistrationDocument({
-        sessionToken: "sess:doc-orphan",
+        patientSession,
         registrationRequestId: "nonexistent",
-        rsaId: rawRsaId,
         email: "a@b.c",
         phoneNumber: "1",
         residentialAddress: "a",
@@ -716,33 +720,11 @@ describe("RegistrationService", () => {
     ).rejects.toThrow("Registration request not found");
   });
 
-  it("rejects submission when the RSA ID does not match the request", async () => {
-    const otherPatient = HashedRsaId.fromPersisted("hashed:other-id");
-    placeRegistrationLink("doc-other", { patient: otherPatient });
-    const req = new RegistrationRequest(
-      "req-doc-2",
-      otherPatient,
-      "practice-1",
-      RegistrationStatus.awaitingCompletion(),
-    );
-    registrationRequests.requests.set(req.id, req);
-
-    await expect(
-      service.submitRegistrationDocument({
-        sessionToken: "sess:doc-other",
-        registrationRequestId: req.id,
-        rsaId: rawRsaId,
-        email: "a@b.c",
-        phoneNumber: "1",
-        residentialAddress: "a",
-      }),
-    ).rejects.toThrow(
-      "The identity number does not match this registration request",
-    );
-  });
-
   it("updates the registration document when resubmitting after rejection", async () => {
     placeRegistrationLink("doc-resubmit");
+    const resubmitSession = await protectedPatientSession.verify(
+      "sess:doc-resubmit",
+    );
     const patient = HashedRsaId.fromPersisted(hashedRsaId);
     const req = new RegistrationRequest(
       "req-doc-3",
@@ -768,9 +750,8 @@ describe("RegistrationService", () => {
     );
 
     await service.submitRegistrationDocument({
-      sessionToken: "sess:doc-resubmit",
+      patientSession: resubmitSession,
       registrationRequestId: "req-doc-3",
-      rsaId: rawRsaId,
       email: "new@e.test",
       phoneNumber: "082",
       residentialAddress: "2 New St",
@@ -785,6 +766,7 @@ describe("RegistrationService", () => {
 
   it("does not allow submission from AWAITING_REVIEW (already submitted)", async () => {
     placeRegistrationLink("doc-state");
+    const patientSession = await protectedPatientSession.verify("sess:doc-state");
     const patient = HashedRsaId.fromPersisted(hashedRsaId);
     const req = new RegistrationRequest(
       "req-doc-4",
@@ -796,58 +778,13 @@ describe("RegistrationService", () => {
 
     await expect(
       service.submitRegistrationDocument({
-        sessionToken: "sess:doc-state",
+        patientSession,
         registrationRequestId: req.id,
-        rsaId: rawRsaId,
         email: "a@b.c",
         phoneNumber: "1",
         residentialAddress: "a",
       }),
     ).rejects.toThrow("Cannot submit registration in current state");
-  });
-
-  it("rejects document submission on invalid session token", async () => {
-    const patient = HashedRsaId.fromPersisted(hashedRsaId);
-    const req = new RegistrationRequest(
-      "req-doc-sess-1",
-      patient,
-      "practice-1",
-      RegistrationStatus.awaitingCompletion(),
-    );
-    registrationRequests.requests.set(req.id, req);
-
-    await expect(
-      service.submitRegistrationDocument({
-        sessionToken: "not-sess",
-        registrationRequestId: req.id,
-        rsaId: rawRsaId,
-        email: "a@b.c",
-        phoneNumber: "1",
-        residentialAddress: "a",
-      }),
-    ).rejects.toThrow("Invalid session token");
-  });
-
-  it("rejects document submission when the session link row is missing", async () => {
-    const patient = HashedRsaId.fromPersisted(hashedRsaId);
-    const req = new RegistrationRequest(
-      "req-doc-sess-2",
-      patient,
-      "practice-1",
-      RegistrationStatus.awaitingCompletion(),
-    );
-    registrationRequests.requests.set(req.id, req);
-
-    await expect(
-      service.submitRegistrationDocument({
-        sessionToken: "sess:missing-link-row",
-        registrationRequestId: req.id,
-        rsaId: rawRsaId,
-        email: "a@b.c",
-        phoneNumber: "1",
-        residentialAddress: "a",
-      }),
-    ).rejects.toThrow("Invalid or stale session");
   });
 
   it("rejects document submission when session does not match the request patient", async () => {
@@ -860,12 +797,14 @@ describe("RegistrationService", () => {
       RegistrationStatus.awaitingCompletion(),
     );
     registrationRequests.requests.set(req.id, req);
+    const patientSession = await protectedPatientSession.verify(
+      "sess:doc-wrong-patient",
+    );
 
     await expect(
       service.submitRegistrationDocument({
-        sessionToken: "sess:doc-wrong-patient",
+        patientSession,
         registrationRequestId: req.id,
-        rsaId: rawRsaId,
         email: "a@b.c",
         phoneNumber: "1",
         residentialAddress: "a",
