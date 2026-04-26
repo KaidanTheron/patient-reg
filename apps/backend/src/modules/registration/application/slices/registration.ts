@@ -81,6 +81,9 @@ export class RegistrationService {
         };
     }
 
+    // rejects a registration submission
+    async rejectRegistration() {};
+
     // creates registration request, auth link and notifies patient
     async initiateRegistration(
         command: InitiateRegistrationCommand,
@@ -100,6 +103,11 @@ export class RegistrationService {
 
         if (!practice) {
             throw new Error("Practice not found.");
+        }
+
+        const alreadyExists = await this.registrationRequests.findByPatientAndPractice(hashedIdentity, practiceId);
+        if (alreadyExists) {
+            throw new Error("A registration request for this patient already exists")
         }
 
         const newRequest = new DraftRegistrationRequest(
