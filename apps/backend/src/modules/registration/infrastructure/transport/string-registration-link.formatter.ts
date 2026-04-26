@@ -1,9 +1,11 @@
 import { Injectable } from "@nestjs/common";
+import { env } from "src/config/env";
 import { RegistrationLinkFormatter } from "../../domain/ports/registration-link.formatter";
 
 @Injectable()
 export class StringRegistrationLinkFormatter extends RegistrationLinkFormatter {
   format(token: string): string {
-    return `http://localhost:5173/register?token=${encodeURIComponent(token)}`;
+    const base = env.PATIENT_APP_URL.replace(/\/$/, "");
+    return `${base}/register/${encodeURIComponent(token)}`;
   }
 }

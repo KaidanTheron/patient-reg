@@ -59,6 +59,9 @@ export class RegistrationRequestPayload {
   @Field()
   registrationRequestStatus: string;
 
+  @Field()
+  practiceName: string;
+
   @Field({ nullable: true })
   rejectionReason?: string;
 }
@@ -71,6 +74,15 @@ export class VerifyRegistrationInput {
 
   @Field()
   rsaId: string;
+}
+
+@ObjectType()
+export class PatientProfilePayload {
+  @Field(() => String, { nullable: true })
+  email?: string | null;
+
+  @Field(() => String, { nullable: true })
+  phone?: string | null;
 }
 
 @ObjectType()

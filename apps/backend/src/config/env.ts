@@ -16,6 +16,8 @@ const envSchema = z.object({
     DB_TYPE: z.enum(DBType).default(DBType.postgres),
     DB_MAX_CONNECTIONS: z.coerce.number().optional(),
     SECRET: z.string().default("supersecretsecretkey"),
+    /** Base URL of the patient-facing app (Vite / React Router); no trailing slash. */
+    PATIENT_APP_URL: z.string().default("http://localhost:5173"),
 })
 
 const getEnv = () => {

@@ -25,12 +25,19 @@ type Mutation {
   verifyRegistration(input: VerifyRegistrationInput!): VerifyRegistrationPayload!
 }
 
+type PatientProfilePayload {
+  email: String
+  phone: String
+}
+
 type PracticePayload {
   id: String!
   name: String!
 }
 
 type Query {
+  myPatientProfile: PatientProfilePayload!
+  myRegistrationRequest(id: String!): RegistrationRequestPayload!
   myRegistrationRequests: [RegistrationRequestPayload!]!
   practice(id: String!): PracticePayload
   practiceRegistrationRequests(practiceId: String!): [RegistrationRequestPayload!]!
@@ -38,6 +45,7 @@ type Query {
 }
 
 type RegistrationRequestPayload {
+  practiceName: String!
   registrationRequestId: String!
   registrationRequestStatus: String!
   rejectionReason: String

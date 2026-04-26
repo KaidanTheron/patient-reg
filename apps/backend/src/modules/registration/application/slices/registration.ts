@@ -8,6 +8,7 @@ import { RegistrationLinkTokenSigner } from "../../domain/ports/registration-lin
 import { RegistrationLinkFormatter } from "../../domain/ports/registration-link.formatter";
 import {
   DraftRegistrationRequest,
+  RegistrationRequest,
   UpdateRegistrationRequest,
 } from "../../domain/entities/registration-request.entity";
 import {
@@ -55,6 +56,7 @@ export type ApproveRegistrationCommand = {
 export type ApproveRegistrationResult = {
   registrationRequestId: string;
   registrationRequestStatus: string;
+  practiceName: string;
 };
 
 export type InitiateRegistrationCommand = {
@@ -66,6 +68,7 @@ export type InitiateRegistrationCommand = {
 export type InitiateRegistrationResult = {
   registrationRequestId: string;
   registrationRequestStatus: string;
+  practiceName: string;
 };
 
 export type DeriveDataCommand = {
@@ -87,12 +90,14 @@ export type SubmitRegistrationDocumentCommand = {
 export type SubmitRegistrationDocumentResult = {
   registrationRequestId: string;
   registrationRequestStatus: string;
+  practiceName: string;
 };
 
 export type RegistrationRequestListItem = {
   registrationRequestId: string;
   registrationRequestStatus: string;
   rejectionReason?: string;
+  practiceName: string;
 };
 
 export type VerifyRegistrationCommand = {
@@ -124,6 +129,12 @@ export type VerifyRegistrationResult =
       maxAttempts: number;
       attemptsAfterFailure?: number;
     };
+
+/** Decrypted contact fields for the session’s patient; raw RSA is not stored on {@link PatientIdentity}. */
+export type PatientSessionDetails = {
+  email?: string;
+  phone?: string;
+};
 
 @Injectable()
 export class RegistrationService {
@@ -169,9 +180,12 @@ export class RegistrationService {
       new DraftPatientPractice(request.patientIdentityId, request.practiceId),
     );
 
+    const practiceName = await this.resolvePracticeName(request.practiceId);
+
     return {
       registrationRequestId: request.id,
       registrationRequestStatus: request.getStatus().toString(),
+      practiceName,
     };
   }
 
@@ -245,6 +259,7 @@ export class RegistrationService {
     return {
       registrationRequestId: created.id,
       registrationRequestStatus: created.getStatus().toString(),
+      practiceName: practice.name,
     };
   }
 
@@ -283,39 +298,52 @@ export class RegistrationService {
     }
     const requests =
       await this.registrationRequests.findAllByPracticeId(practiceId);
-    return requests.map((request) => {
-      const rejectionReason = request.getRejectionReason();
-      return {
-        registrationRequestId: request.id,
-        registrationRequestStatus: request.getStatus().toString(),
-        rejectionReason,
-      };
-    });
+    return requests.map((request) =>
+      this.toRegistrationRequestListItem(request, practice.name),
+    );
   }
 
   /**
-   * Lists registration requests for the patient associated with a valid
-   * patient session token. Resolves the patient via the link id embedded in
-   * the session JWT and `RegistrationLinkRepository.findById`.
+   * Lists registration requests for the verified patient session.
+   *
+   * Callers must pass a {@link VerifiedPatientSession} from
+   * {@link ProtectedPatientSession} (e.g. patient session guard); this method
+   * does not accept a raw session token.
    */
   async findAllPatientRegRequests(
-    session: string | VerifiedPatientSession,
+    patientSession: VerifiedPatientSession,
   ): Promise<RegistrationRequestListItem[]> {
-    const patientSession =
-      typeof session === "string"
-        ? await this.protectedPatientSession.verify(session)
-        : session;
     const requests = await this.registrationRequests.findAllByPatientIdentity(
       patientSession.patientIdentityId,
     );
-    return requests.map((request) => {
-      const rejectionReason = request.getRejectionReason();
-      return {
-        registrationRequestId: request.id,
-        registrationRequestStatus: request.getStatus().toString(),
-        rejectionReason,
-      };
-    });
+    return Promise.all(
+      requests.map(async (request) =>
+        this.toRegistrationRequestListItem(
+          request,
+          await this.resolvePracticeName(request.practiceId),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Loads a single registration request for the verified patient session.
+   * Includes the practice display name.
+   */
+  async findPatientRegRequestById(
+    patientSession: VerifiedPatientSession,
+    registrationRequestId: string,
+  ): Promise<RegistrationRequestListItem> {
+    const request =
+      await this.registrationRequests.findById(registrationRequestId);
+    if (!request) {
+      throw new Error("Registration request not found");
+    }
+    if (!patientSession.patientIdentityId.equals(request.patientIdentityId)) {
+      throw new Error("Session is not valid for this registration request");
+    }
+    const practiceName = await this.resolvePracticeName(request.practiceId);
+    return this.toRegistrationRequestListItem(request, practiceName);
   }
 
   /**
@@ -375,9 +403,12 @@ export class RegistrationService {
       ),
     );
 
+    const practiceName = await this.resolvePracticeName(request.practiceId);
+
     return {
       registrationRequestId: request.id,
       registrationRequestStatus: request.getStatus().toString(),
+      practiceName,
     };
   }
 
@@ -496,13 +527,62 @@ export class RegistrationService {
     };
   }
 
-  // gets patient data for a verified patient session
-//   async patient(): Patie
+  /**
+   * Returns decrypted contact details for the patient associated with a
+   * {@link VerifiedPatientSession} (e.g. from the patient session guard).
+   */
+  async getPatientDetailsForSession(
+    patientSession: VerifiedPatientSession,
+  ): Promise<PatientSessionDetails> {
+    const patient = await this.patientIdentities.findById(
+      patientSession.patientIdentityId,
+    );
+    if (!patient) {
+      throw new Error("Patient not found");
+    }
+
+    const [email, phone] = await Promise.all([
+      patient.email
+        ? patient.email.decrypt(this.encrypter)
+        : Promise.resolve(undefined as string | undefined),
+      patient.phone
+        ? patient.phone.decrypt(this.encrypter)
+        : Promise.resolve(undefined as string | undefined),
+    ]);
+
+    return {
+      ...(email !== undefined ? { email } : {}),
+      ...(phone !== undefined ? { phone } : {}),
+    };
+  }
 
   private toPracticeResult(practice: Practice): PracticeResult {
     return {
       id: practice.id,
       name: practice.name,
+    };
+  }
+
+  private async resolvePracticeName(
+    practiceId: Practice["id"],
+  ): Promise<string> {
+    const practice = await this.practices.findById(practiceId);
+    if (!practice) {
+      throw new Error("Practice not found.");
+    }
+    return practice.name;
+  }
+
+  private toRegistrationRequestListItem(
+    request: RegistrationRequest,
+    practiceName: string,
+  ): RegistrationRequestListItem {
+    const rejectionReason = request.getRejectionReason();
+    return {
+      registrationRequestId: request.id,
+      registrationRequestStatus: request.getStatus().toString(),
+      practiceName,
+      rejectionReason,
     };
   }
 }

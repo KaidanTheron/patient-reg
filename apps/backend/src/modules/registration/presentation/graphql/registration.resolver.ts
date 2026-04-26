@@ -9,6 +9,7 @@ import {
   CreatePracticeInput,
   InitiateRegistrationInput,
   PracticePayload,
+  PatientProfilePayload,
   RegistrationRequestPayload,
   SubmitRegistrationDocumentInput,
   VerifyRegistrationInput,
@@ -44,8 +45,6 @@ export class RegistrationResolver {
     return this.registration.approveRegistration(input);
   }
 
-  // TODO: should get registrationRequestId from context from guard
-  // Do not implement yet
   @Mutation(() => RegistrationRequestPayload)
   @UseGuards(PatientSessionGuard)
   async submitRegistrationDocument(
@@ -108,5 +107,28 @@ export class RegistrationResolver {
     @PatientSession() patientSession: VerifiedPatientSession,
   ): Promise<RegistrationRequestPayload[]> {
     return this.registration.findAllPatientRegRequests(patientSession);
+  }
+
+  @Query(() => PatientProfilePayload)
+  @UseGuards(PatientSessionGuard)
+  async myPatientProfile(
+    @PatientSession() patientSession: VerifiedPatientSession,
+  ): Promise<PatientProfilePayload> {
+    const d = await this.registration.getPatientDetailsForSession(
+      patientSession,
+    );
+    return {
+      email: d.email ?? null,
+      phone: d.phone ?? null,
+    };
+  }
+
+  @Query(() => RegistrationRequestPayload)
+  @UseGuards(PatientSessionGuard)
+  async myRegistrationRequest(
+    @Args("id") id: string,
+    @PatientSession() patientSession: VerifiedPatientSession,
+  ): Promise<RegistrationRequestPayload> {
+    return this.registration.findPatientRegRequestById(patientSession, id);
   }
 }

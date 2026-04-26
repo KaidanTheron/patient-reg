@@ -427,6 +427,7 @@ describe("RegistrationService", () => {
     expect(result).toEqual({
       registrationRequestId: "registration-1",
       registrationRequestStatus: "AWAITING_COMPLETION",
+      practiceName: "GP",
     });
     expect(request?.patientIdentityId.toString()).toBe(hashedRsaId);
     expect(request?.practiceId).toBe("practice-1");
@@ -507,6 +508,7 @@ describe("RegistrationService", () => {
     expect(result).toEqual({
       registrationRequestId: request.id,
       registrationRequestStatus: "APPROVED",
+      practiceName: "GP",
     });
     expect(registrationRequests.updates).toHaveLength(1);
     expect(registrationRequests.updates[0].id).toBe(request.id);
@@ -583,9 +585,11 @@ describe("RegistrationService", () => {
     expect(list[0].registrationRequestId).toBe(newer.id);
     expect(list[0].registrationRequestStatus).toBe("REJECTED");
     expect(list[0].rejectionReason).toBe("Missing documents");
+    expect(list[0].practiceName).toBe("GP");
     expect(list[1].registrationRequestId).toBe(older.id);
     expect(list[1].registrationRequestStatus).toBe("AWAITING_REVIEW");
     expect(list[1].rejectionReason).toBeUndefined();
+    expect(list[1].practiceName).toBe("GP");
   });
 
   it("throws when listing registration requests for an unknown practice", async () => {
@@ -595,19 +599,22 @@ describe("RegistrationService", () => {
   });
 
   it("findRegistrationRequestsForPatientSession: throws on invalid session token", async () => {
-    await expect(service.findAllPatientRegRequests("not-sess")).rejects.toThrow(
+    await expect(protectedPatientSession.verify("not-sess")).rejects.toThrow(
       "Invalid session token",
     );
   });
 
   it("findRegistrationRequestsForPatientSession: throws when link row is missing", async () => {
     await expect(
-      service.findAllPatientRegRequests("sess:orphan-id"),
+      protectedPatientSession.verify("sess:orphan-id"),
     ).rejects.toThrow("Invalid or stale session");
   });
 
   it("findRegistrationRequestsForPatientSession: returns requests for patient on link", async () => {
     placeRegistrationLink("lnk-patient-list");
+    const patientSession = await protectedPatientSession.verify(
+      "sess:lnk-patient-list",
+    );
     const patient = HashedRsaId.fromPersisted(hashedRsaId);
     const r1 = new RegistrationRequest(
       "req-mr-1",
@@ -626,23 +633,96 @@ describe("RegistrationService", () => {
     registrationRequests.requests.set(r2.id, r2);
     practices.practices.set("practice-2", Practice.create("practice-2", "P2"));
 
-    const list = await service.findAllPatientRegRequests(
-      "sess:lnk-patient-list",
-    );
+    const list = await service.findAllPatientRegRequests(patientSession);
     expect(list).toHaveLength(2);
     expect(list).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           registrationRequestId: "req-mr-1",
           registrationRequestStatus: "AWAITING_COMPLETION",
+          practiceName: "GP",
         }),
         expect.objectContaining({
           registrationRequestId: "req-mr-2",
           registrationRequestStatus: "REJECTED",
           rejectionReason: "bad",
+          practiceName: "P2",
         }),
       ]),
     );
+  });
+
+  it("findPatientRegRequestById: returns one request with practice name", async () => {
+    placeRegistrationLink("lnk-single");
+    const patientSession = await protectedPatientSession.verify(
+      "sess:lnk-single",
+    );
+    const patient = HashedRsaId.fromPersisted(hashedRsaId);
+    const req = new RegistrationRequest(
+      "req-single-1",
+      patient,
+      "practice-1",
+      RegistrationStatus.awaitingCompletion(),
+    );
+    registrationRequests.requests.set(req.id, req);
+
+    const item = await service.findPatientRegRequestById(
+      patientSession,
+      "req-single-1",
+    );
+    expect(item).toEqual({
+      registrationRequestId: "req-single-1",
+      registrationRequestStatus: "AWAITING_COMPLETION",
+      practiceName: "GP",
+    });
+  });
+
+  it("findPatientRegRequestById: throws when request is missing", async () => {
+    placeRegistrationLink("lnk-miss");
+    const patientSession = await protectedPatientSession.verify(
+      "sess:lnk-miss",
+    );
+    await expect(
+      service.findPatientRegRequestById(patientSession, "no-such-id"),
+    ).rejects.toThrow("Registration request not found");
+  });
+
+  it("findPatientRegRequestById: throws when session does not match request patient", async () => {
+    const otherPatient = HashedRsaId.fromPersisted("hashed:other-id");
+    placeRegistrationLink("lnk-mismatch", { patient: otherPatient });
+    const patientSession = await protectedPatientSession.verify(
+      "sess:lnk-mismatch",
+    );
+    const req = new RegistrationRequest(
+      "req-mismatch-1",
+      HashedRsaId.fromPersisted(hashedRsaId),
+      "practice-1",
+      RegistrationStatus.awaitingCompletion(),
+    );
+    registrationRequests.requests.set(req.id, req);
+
+    await expect(
+      service.findPatientRegRequestById(patientSession, req.id),
+    ).rejects.toThrow("Session is not valid for this registration request");
+  });
+
+  it("getPatientDetailsForSession: returns decrypted contact details", async () => {
+    placeRegistrationLink("prof-link");
+    const patientSession = await protectedPatientSession.verify(
+      "sess:prof-link",
+    );
+    const details = await service.getPatientDetailsForSession(patientSession);
+    expect(details).toEqual({ email: "patient@example.com" });
+  });
+
+  it("getPatientDetailsForSession: throws when patient identity is missing", async () => {
+    placeRegistrationLink("no-pi", {
+      patient: HashedRsaId.fromPersisted("hashed:not-in-repo"),
+    });
+    const patientSession = await protectedPatientSession.verify("sess:no-pi");
+    await expect(
+      service.getPatientDetailsForSession(patientSession),
+    ).rejects.toThrow("Patient not found");
   });
 
   function placeRegistrationLink(
@@ -699,6 +779,7 @@ describe("RegistrationService", () => {
     expect(out).toEqual({
       registrationRequestId: "req-doc-1",
       registrationRequestStatus: "AWAITING_REVIEW",
+      practiceName: "GP",
     });
     expect(req.getStatus().toString()).toBe("AWAITING_REVIEW");
     expect(registrationDocuments.byId.size).toBe(1);
