@@ -2,11 +2,13 @@ import "reflect-metadata";
 import dataSource from "../../config/database.config";
 import { PatientIdentityEntity } from "../../modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
 import { CryptoHasher } from "../../modules/registration/infrastructure/security/crypto-hasher";
-import { identitySeedPlainSaIds, practiceNames } from "./seed.data";
+import { identities, practiceNames } from "./seed.data";
 import { PracticeEntity } from "src/modules/registration/infrastructure/persistence/typeorm/entities/practice.entity";
+import { CryptoEncrypter } from "src/modules/registration/infrastructure/security/crypto-encrypter";
 
 async function main(): Promise<void> {
     const hasher = new CryptoHasher();
+    const encrypter = new CryptoEncrypter();
     await dataSource.initialize();
 
     try {
@@ -14,14 +16,16 @@ async function main(): Promise<void> {
         let insertedCount = 0;
         let skippedCount = 0;
 
-        for (const plain of identitySeedPlainSaIds) {
-            const hashedIdentity = await hasher.hash(plain);
+        for (const identity of identities) {
+            const hashedIdentity = await hasher.hash(identity.identity);
+            const encryptedPhone = await encrypter.encrypt(identity.phone!);
+            const encryptedEmail = await encrypter.encrypt(identity.email!);
             const already = await patientIdentities.exists({ where: { identity: hashedIdentity } });
             if (already) {
                 skippedCount += 1;
                 continue;
             }
-            await patientIdentities.insert({ identity: hashedIdentity });
+            await patientIdentities.insert({ identity: hashedIdentity, email: encryptedEmail, phone: encryptedPhone });
             insertedCount += 1;
         }
 

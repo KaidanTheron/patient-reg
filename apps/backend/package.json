@@ -24,7 +24,7 @@
     "migration:revert": "pnpm run typeorm migration:revert -d src/config/database.config.ts",
     "migration:show": "pnpm run typeorm migration:show -d src/config/database.config.ts",
     "new-module": "node ./scripts/new-module.js",
-    "seed:identity": "ts-node -r tsconfig-paths/register src/database/seeds/seed.ts"
+    "seed": "ts-node -r tsconfig-paths/register src/database/seeds/seed.ts"
   },
   "dependencies": {
     "@apollo/server": "^5.5.0",

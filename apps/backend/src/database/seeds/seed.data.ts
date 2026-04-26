@@ -1,7 +1,16 @@
-export const identitySeedPlainSaIds: readonly string[] = [
-    "0501018431087",
-    "0501017561082",
-    "0501016580083",
+import { PatientIdentityEntity } from "src/modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
+
+export const identities: readonly Omit<PatientIdentityEntity, "id">[] = [
+    {
+        email: "notreal@notreal.com",
+        identity: "0501018431087",
+        phone: "+27825550199",
+    },
+    {
+        email: "old.email@example.com",
+        identity: "001015009086",
+        phone: "+27821234567",
+    }
 ];
 
 export const practiceNames: readonly string[] = [
