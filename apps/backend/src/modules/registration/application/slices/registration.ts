@@ -13,6 +13,8 @@ import { RsaIdNumber } from "../../domain/value-objects/rsaid";
 import { Hasher } from "../../domain/ports/hasher";
 import { RegistrationLinkRepository } from "../../domain/ports/registration-link.repository";
 import { Encrypter } from "../../domain/ports/encrypter";
+import { DraftPatientPractice } from "../../domain/entities/patient-practice.entity";
+import { PatientPracticeRepository } from "../../domain/ports/patient-practice.repository";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -48,6 +50,12 @@ export type DeriveDataCommand = {
     patientIdentityId: string
 }
 
+export type RegistrationRequestListItem = {
+  registrationRequestId: string;
+  registrationRequestStatus: string;
+  rejectionReason?: string;
+};
+
 @Injectable()
 export class RegistrationService {
     constructor(
@@ -55,6 +63,7 @@ export class RegistrationService {
         private readonly registrationLinks: RegistrationLinkRepository,
         private readonly patientIdentities: PatientIdentityRepository,
         private readonly practices: PracticeRepository,
+        private readonly patientPractices: PatientPracticeRepository,
         private readonly notifier: Notifier,
         private readonly hasher: Hasher,
         private readonly encrypter: Encrypter,
@@ -79,6 +88,13 @@ export class RegistrationService {
         await this.registrationRequests.update(
             command.registrationRequestId,
             new UpdateRegistrationRequest(request.getStatus()),
+        );
+
+        await this.patientPractices.ensureLinked(
+            new DraftPatientPractice(
+                request.patientIdentityId,
+                request.practiceId,
+            ),
         );
 
         return {
@@ -153,7 +169,6 @@ export class RegistrationService {
         };
     }
 
-
     async createPractice(
         command: CreatePracticeCommand,
     ): Promise<PracticeResult> {
@@ -163,25 +178,48 @@ export class RegistrationService {
 
         const practice = await this.practices.create(command.name.trim());
 
-        return this.toResult(practice);
+        return this.toPracticeResult(practice);
     }
 
-    async findPracticeById(id: Practice["id"]): Promise<PracticeResult | null> {
+    async findPracticeById(
+        id: Practice["id"],
+    ): Promise<PracticeResult | null> {
         const practice = await this.practices.findById(id);
-        return practice ? this.toResult(practice) : null;
+        return practice ? this.toPracticeResult(practice) : null;
     }
 
     async findPractices(): Promise<PracticeResult[]> {
-        const practices = await this.practices.findAll();
-        return practices.map((practice) => this.toResult(practice));
+        const list = await this.practices.findAll();
+        return list.map((p) => this.toPracticeResult(p));
     }
 
-    private toResult(practice: Practice): PracticeResult {
-        return {
-            id: practice.id,
-            name: practice.name,
-        };
+    // finds patient-practice links for a practice
+    async findLinkedPatients(practiceId: Practice["id"]) {};
+
+    // finds registration requests for a practice
+    async findAllPracticeRegRequests(
+        practiceId: Practice["id"],
+    ): Promise<RegistrationRequestListItem[]> {
+        const practice = await this.practices.findById(practiceId);
+        if (!practice) {
+            throw new Error("Practice not found.");
+        }
+        const requests =
+            await this.registrationRequests.findAllByPracticeId(practiceId);
+        return requests.map((request) => {
+            const rejectionReason = request.getRejectionReason();
+            return {
+                registrationRequestId: request.id,
+                registrationRequestStatus: request.getStatus().toString(),
+                ...(rejectionReason !== undefined
+                    ? { rejectionReason }
+                    : {}),
+            };
+        });
     }
+
+    // finds registration requests for a patient
+    async findAllPatientRegRequests(patientIdentityId: string) {};
 
     // accepts registation document
     async submitRegistration() {};
@@ -197,5 +235,12 @@ export class RegistrationService {
         const identity = RsaIdNumber.create(rawIdentity);
 
         return identity.deriveDateOfBirth();
-    };
+    }
+
+    private toPracticeResult(practice: Practice): PracticeResult {
+        return {
+            id: practice.id,
+            name: practice.name,
+        };
+    }
 }

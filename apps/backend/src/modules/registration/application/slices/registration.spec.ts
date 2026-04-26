@@ -1,5 +1,9 @@
 import { Practice } from "../../domain/entities/practice.entity";
 import {
+  DraftPatientPractice,
+  PatientPractice,
+} from "../../domain/entities/patient-practice.entity";
+import {
   DraftRegistrationRequest,
   RegistrationRequest,
   UpdateRegistrationRequest,
@@ -14,6 +18,7 @@ import { Hasher } from "../../domain/ports/hasher";
 import { Notifier } from "../../domain/ports/notifier";
 import { PatientIdentityRepository } from "../../domain/ports/patient-identity.repository";
 import { PracticeRepository } from "../../domain/ports/practice.repository";
+import { PatientPracticeRepository } from "../../domain/ports/patient-practice.repository";
 import { RegistrationLinkFormatter } from "../../domain/ports/registration-link.formatter";
 import {
   RegistrationLinkTokenPayload,
@@ -50,6 +55,14 @@ class InMemoryRegistrationRequestRepository extends RegistrationRequestRepositor
           request.practiceId === practice,
       ) ?? null
     );
+  }
+
+  async findAllByPracticeId(
+    practiceId: RegistrationRequest["practiceId"],
+  ): Promise<RegistrationRequest[]> {
+    return [...this.requests.values()]
+      .filter((request) => request.practiceId === practiceId)
+      .sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
   }
 
   async create(
@@ -194,6 +207,35 @@ class InMemoryPracticeRepository extends PracticeRepository {
   }
 }
 
+class InMemoryPatientPracticeRepository extends PatientPracticeRepository {
+  /**
+   * Key: `${hashedIdentity}|${practiceId}` for idempotent `ensureLinked`.
+   */
+  readonly byPair = new Map<string, PatientPractice>();
+  private nextId = 1;
+  private readonly linkCreatedAt = new Date(0);
+
+  private key(draft: DraftPatientPractice): string {
+    return `${draft.patientIdentityId.toString()}|${draft.practiceId}`;
+  }
+
+  async ensureLinked(draft: DraftPatientPractice): Promise<PatientPractice> {
+    const k = this.key(draft);
+    const existing = this.byPair.get(k);
+    if (existing) {
+      return existing;
+    }
+    const created = new PatientPractice(
+      `patient-practice-${this.nextId++}`,
+      draft.patientIdentityId,
+      draft.practiceId,
+      this.linkCreatedAt,
+    );
+    this.byPair.set(k, created);
+    return created;
+  }
+}
+
 class DeterministicHasher extends Hasher {
   async hash(rawValue: string): Promise<string> {
     return `hashed:${rawValue}`;
@@ -239,6 +281,7 @@ describe("RegistrationService", () => {
   let notifier: SpyNotifier;
   let tokenSigner: FakeRegistrationLinkTokenSigner;
   let encrypter: TestEncrypter;
+  let patientPractices: InMemoryPatientPracticeRepository;
   let service: RegistrationService;
 
   beforeEach(() => {
@@ -249,6 +292,7 @@ describe("RegistrationService", () => {
     );
     practices = new InMemoryPracticeRepository();
     practices.practices.set("practice-1", Practice.create("practice-1", "GP"));
+    patientPractices = new InMemoryPatientPracticeRepository();
     notifier = new SpyNotifier();
     tokenSigner = new FakeRegistrationLinkTokenSigner();
     encrypter = new TestEncrypter();
@@ -257,6 +301,7 @@ describe("RegistrationService", () => {
       registrationLinks,
       patientIdentities,
       practices,
+      patientPractices,
       notifier,
       new DeterministicHasher(),
       encrypter,
@@ -303,6 +348,7 @@ describe("RegistrationService", () => {
       registrationLinks,
       patientIdentities,
       practices,
+      patientPractices,
       notifier,
       new DeterministicHasher(),
       encrypter,
@@ -362,6 +408,10 @@ describe("RegistrationService", () => {
     expect(registrationRequests.updates[0].request.status?.toString()).toBe(
       "APPROVED",
     );
+    expect(patientPractices.byPair.size).toBe(1);
+    const [link] = patientPractices.byPair.values();
+    expect(link.patientIdentityId.toString()).toBe(hashedRsaId);
+    expect(link.practiceId).toBe("practice-1");
   });
 
   it("creates a practice with a trimmed name", async () => {
@@ -389,5 +439,50 @@ describe("RegistrationService", () => {
       { id: "practice-1", name: "GP" },
       { id: "practice-2", name: "Alpha Practice" },
     ]);
+  });
+
+  it("lists registration requests for a practice, newest by id first", async () => {
+    const pA = HashedRsaId.fromPersisted("hashed:patient-a");
+    const pB = HashedRsaId.fromPersisted("hashed:patient-b");
+    const pOther = HashedRsaId.fromPersisted("hashed:patient-c");
+    const older = new RegistrationRequest(
+      "00000000-0000-4000-8000-000000000001",
+      pA,
+      "practice-1",
+      RegistrationStatus.awaitingReview(),
+    );
+    const newer = new RegistrationRequest(
+      "00000000-0000-4000-8000-000000000002",
+      pB,
+      "practice-1",
+      RegistrationStatus.rejected(),
+      "Missing documents",
+    );
+    const otherPractice = new RegistrationRequest(
+      "00000000-0000-4000-8000-000000000003",
+      pOther,
+      "practice-2",
+      RegistrationStatus.awaitingCompletion(),
+    );
+    registrationRequests.requests.set(older.id, older);
+    registrationRequests.requests.set(newer.id, newer);
+    registrationRequests.requests.set(otherPractice.id, otherPractice);
+    practices.practices.set("practice-2", Practice.create("practice-2", "Other"));
+
+    const list = await service.findAllPracticeRegRequests("practice-1");
+
+    expect(list).toHaveLength(2);
+    expect(list[0].registrationRequestId).toBe(newer.id);
+    expect(list[0].registrationRequestStatus).toBe("REJECTED");
+    expect(list[0].rejectionReason).toBe("Missing documents");
+    expect(list[1].registrationRequestId).toBe(older.id);
+    expect(list[1].registrationRequestStatus).toBe("AWAITING_REVIEW");
+    expect(list[1].rejectionReason).toBeUndefined();
+  });
+
+  it("throws when listing registration requests for an unknown practice", async () => {
+    await expect(
+      service.findAllPracticeRegRequests("no-such-practice"),
+    ).rejects.toThrow("Practice not found.");
   });
 });

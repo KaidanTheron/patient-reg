@@ -70,6 +70,17 @@ export class RegistrationRequestRepository extends Repository {
     return entity ? this.toDomain(entity) : null;
   }
 
+  public async findAllByPracticeId(
+    practiceId: RegistrationRequest["practiceId"],
+  ): Promise<RegistrationRequest[]> {
+    const entities = await this.repo.find({
+      where: { practice: { id: practiceId } },
+      relations: RegistrationRequestRepository.withPatientAndPractice,
+      order: { createdAt: "DESC" },
+    });
+    return entities.map((entity) => this.toDomain(entity));
+  }
+
   public async update(
     id: RegistrationRequest["id"],
     request: Partial<UpdateRegistrationRequest>,

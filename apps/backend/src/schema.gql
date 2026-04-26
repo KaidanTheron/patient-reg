@@ -30,10 +30,12 @@ type PracticePayload {
 
 type Query {
   practice(id: String!): PracticePayload
+  practiceRegistrationRequests(practiceId: String!): [RegistrationRequestPayload!]!
   practices: [PracticePayload!]!
 }
 
 type RegistrationRequestPayload {
   registrationRequestId: String!
   registrationRequestStatus: String!
+  rejectionReason: String
 }

@@ -43,4 +43,7 @@ export class RegistrationRequestPayload {
 
   @Field()
   registrationRequestStatus: string;
+
+  @Field({ nullable: true })
+  rejectionReason?: string;
 }

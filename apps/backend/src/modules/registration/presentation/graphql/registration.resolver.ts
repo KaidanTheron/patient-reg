@@ -51,4 +51,11 @@ export class RegistrationResolver {
   async practices(): Promise<PracticePayload[]> {
     return this.registration.findPractices();
   }
+
+  @Query(() => [RegistrationRequestPayload])
+  async practiceRegistrationRequests(
+    @Args("practiceId") practiceId: string,
+  ): Promise<RegistrationRequestPayload[]> {
+    return this.registration.findAllPracticeRegRequests(practiceId);
+  }
 }

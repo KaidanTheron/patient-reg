@@ -6,6 +6,7 @@ import {
 import { Hasher } from "./domain/ports/hasher";
 import { PatientIdentityRepository } from "./domain/ports/patient-identity.repository";
 import { PracticeRepository } from "./domain/ports/practice.repository";
+import { PatientPracticeRepository } from "./domain/ports/patient-practice.repository";
 import { RegistrationRequestRepository } from "./domain/ports/registration-request.repository";
 import { RegistrationLinkRepository } from "./domain/ports/registration-link.repository";
 import { RegistrationLinkTokenSigner } from "./domain/ports/registration-link-token.signer";
@@ -16,10 +17,12 @@ import { CryptoHasher } from "./infrastructure/security/crypto-hasher";
 import { JwtRegistrationLinkTokenSigner } from "./infrastructure/security/jwt-registration-link-token.signer";
 import { PatientIdentityEntity } from "./infrastructure/persistence/typeorm/entities/patient-identity.entity";
 import { PracticeEntity } from "./infrastructure/persistence/typeorm/entities/practice.entity";
+import { PatientPracticeEntity } from "./infrastructure/persistence/typeorm/entities/patient-practice.entity";
 import { RegistrationRequestEntity } from "./infrastructure/persistence/typeorm/entities/registration-request.entity";
 import { RegistrationLinkEntity } from "./infrastructure/persistence/typeorm/entities/registration-link.entity";
 import { PatientIdentityRepository as TypeOrmPatientIdentityRepository } from "./infrastructure/persistence/typeorm/repositories/patient-identity.repository";
 import { PracticeRepository as TypeOrmPracticeRepository } from "./infrastructure/persistence/typeorm/repositories/practice.repository";
+import { TypeOrmPatientPracticeRepository } from "./infrastructure/persistence/typeorm/repositories/patient-practice.repository";
 import { RegistrationRequestRepository as TypeOrmRegistrationRequestRepository } from "./infrastructure/persistence/typeorm/repositories/registration-request.repository";
 import { TypeOrmRegistrationLinkRepository } from "./infrastructure/persistence/typeorm/repositories/registration-link.repository";
 import { RegistrationResolver } from "./presentation/graphql/registration.resolver";
@@ -32,6 +35,7 @@ import { StringRegistrationLinkFormatter } from "./infrastructure/transport/stri
     TypeOrmModule.forFeature([
       PatientIdentityEntity,
       PracticeEntity,
+      PatientPracticeEntity,
       RegistrationRequestEntity,
       RegistrationLinkEntity,
     ]),
@@ -56,6 +60,10 @@ import { StringRegistrationLinkFormatter } from "./infrastructure/transport/stri
     {
       provide: PracticeRepository,
       useClass: TypeOrmPracticeRepository,
+    },
+    {
+      provide: PatientPracticeRepository,
+      useClass: TypeOrmPatientPracticeRepository,
     },
   ],
 })
