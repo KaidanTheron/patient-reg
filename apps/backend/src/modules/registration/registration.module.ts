@@ -10,6 +10,8 @@ import { RegistrationRequestRepository } from "./domain/ports/registration-reque
 import { RegistrationLinkRepository } from "./domain/ports/registration-link.repository";
 import { RegistrationLinkTokenSigner } from "./domain/ports/registration-link-token.signer";
 import { RegistrationLinkFormatter } from "./domain/ports/registration-link.formatter";
+import { Encrypter } from "./domain/ports/encrypter";
+import { CryptoEncrypter } from "./infrastructure/security/crypto-encrypter";
 import { CryptoHasher } from "./infrastructure/security/crypto-hasher";
 import { JwtRegistrationLinkTokenSigner } from "./infrastructure/security/jwt-registration-link-token.signer";
 import { PatientIdentityEntity } from "./infrastructure/persistence/typeorm/entities/patient-identity.entity";
@@ -38,6 +40,7 @@ import { StringRegistrationLinkFormatter } from "./infrastructure/transport/stri
     RegistrationService,
     RegistrationResolver,
     { provide: Hasher, useClass: CryptoHasher },
+    { provide: Encrypter, useClass: CryptoEncrypter },
     { provide: Notifier, useClass: ConsoleNotifier },
     { provide: RegistrationLinkTokenSigner, useClass: JwtRegistrationLinkTokenSigner },
     { provide: RegistrationLinkFormatter, useClass: StringRegistrationLinkFormatter },

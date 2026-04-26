@@ -12,6 +12,7 @@ import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
 import { RsaIdNumber } from "../../domain/value-objects/rsaid";
 import { Hasher } from "../../domain/ports/hasher";
 import { RegistrationLinkRepository } from "../../domain/ports/registration-link.repository";
+import { Encrypter } from "../../domain/ports/encrypter";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -43,6 +44,10 @@ export type InitiateRegistrationResult = {
   registrationRequestStatus: string;
 };
 
+export type DeriveDataCommand = {
+    patientIdentityId: string
+}
+
 @Injectable()
 export class RegistrationService {
     constructor(
@@ -52,6 +57,7 @@ export class RegistrationService {
         private readonly practices: PracticeRepository,
         private readonly notifier: Notifier,
         private readonly hasher: Hasher,
+        private readonly encrypter: Encrypter,
         private readonly registrationLinkTokenSigner: RegistrationLinkTokenSigner,
         private readonly registrationLinkFormatter: RegistrationLinkFormatter,
     ) {}
@@ -92,13 +98,17 @@ export class RegistrationService {
         const identity = RsaIdNumber.create(rawIdentity);
         const hashedIdentity = await HashedRsaId.create(identity, this.hasher);
 
-        const [patientValid, practice] = await Promise.all([
-            this.patientIdentities.exists(hashedIdentity),
+        const [patient, practice] = await Promise.all([
+            this.patientIdentities.findById(hashedIdentity),
             this.practices.findById(practiceId)
         ]);
 
-        if (!patientValid) {
+        if (!patient) {
             throw new Error("Registrant not found.");
+        }
+
+        if (!patient.email && !patient.phone) {
+            throw new Error("Registrant contact details not found, unable to initiate registration privately.")
         }
 
         if (!practice) {
@@ -130,8 +140,10 @@ export class RegistrationService {
             expiresAt: link.expiresAt,
         });
         const sendableUrl = this.registrationLinkFormatter.format(token);
+        const rawEmail = await patient.email?.decrypt(this.encrypter);
+        const rawPhone = await patient.phone?.decrypt(this.encrypter);
         await this.notifier.notify(
-            hashedIdentity.toString(),
+            rawEmail ?? rawPhone!, // one of the two will be defined because of check
             `Open ${sendableUrl} in your browser to continue registration (request ${created.id}).`,
         );
 
@@ -179,4 +191,11 @@ export class RegistrationService {
 
     // verifies that user is patient corresponding to registration link
     async verifyRegistration() {};
+
+    deriveData(command: DeriveDataCommand) {
+        const { patientIdentityId: rawIdentity } = command;
+        const identity = RsaIdNumber.create(rawIdentity);
+
+        return identity.deriveDateOfBirth();
+    };
 }

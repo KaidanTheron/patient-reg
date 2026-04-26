@@ -11,5 +11,11 @@ export class PatientIdentityEntity {
 
     @Column({ type: "varchar", unique: true })
     identity: string;
+
+    @Column({ type: "text", nullable: false })
+    email: string | null;
+
+    @Column({ type: "text", nullable: false })
+    phone: string | null;
 }
   

@@ -9,6 +9,7 @@ import {
   RegistrationLink,
   UpdateRegistrationLink,
 } from "../../domain/entities/registration-link.entity";
+import { Encrypter } from "../../domain/ports/encrypter";
 import { Hasher } from "../../domain/ports/hasher";
 import { Notifier } from "../../domain/ports/notifier";
 import { PatientIdentityRepository } from "../../domain/ports/patient-identity.repository";
@@ -20,6 +21,8 @@ import {
 } from "../../domain/ports/registration-link-token.signer";
 import { RegistrationLinkRepository } from "../../domain/ports/registration-link.repository";
 import { RegistrationRequestRepository } from "../../domain/ports/registration-request.repository";
+import { PatientIdentity } from "../../domain/entities/patient-identity.entity";
+import { EncryptedValue } from "../../domain/value-objects/encrypted-value";
 import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
 import { RegistrationLinkStatus } from "../../domain/value-objects/registration-link-status";
 import { RegistrationStatus } from "../../domain/value-objects/registration-status";
@@ -134,6 +137,22 @@ class InMemoryRegistrationLinkRepository extends RegistrationLinkRepository {
   }
 }
 
+const TEST_NOTIFIER_RECIPIENT = "t:patient@example.com";
+
+/** Ciphertexts are "t:" + plaintext so tests can build values without real crypto. */
+class TestEncrypter extends Encrypter {
+  encrypt(plaintext: string): Promise<string> {
+    return Promise.resolve(`t:${plaintext}`);
+  }
+
+  decrypt(ciphertext: string): Promise<string> {
+    if (!ciphertext.startsWith("t:")) {
+      return Promise.reject(new Error("Invalid test ciphertext"));
+    }
+    return Promise.resolve(ciphertext.slice(2));
+  }
+}
+
 class InMemoryPatientIdentityRepository extends PatientIdentityRepository {
   constructor(private readonly validPatients = new Set<string>()) {
     super();
@@ -141,6 +160,16 @@ class InMemoryPatientIdentityRepository extends PatientIdentityRepository {
 
   async exists(identity: HashedRsaId): Promise<boolean> {
     return this.validPatients.has(identity.toString());
+  }
+
+  async findById(identity: HashedRsaId): Promise<PatientIdentity | null> {
+    if (!this.validPatients.has(identity.toString())) {
+      return null;
+    }
+    return new PatientIdentity(
+      HashedRsaId.fromPersisted(identity.toString()),
+      EncryptedValue.fromPersisted(TEST_NOTIFIER_RECIPIENT),
+    );
   }
 }
 
@@ -209,6 +238,7 @@ describe("RegistrationService", () => {
   let practices: InMemoryPracticeRepository;
   let notifier: SpyNotifier;
   let tokenSigner: FakeRegistrationLinkTokenSigner;
+  let encrypter: TestEncrypter;
   let service: RegistrationService;
 
   beforeEach(() => {
@@ -221,6 +251,7 @@ describe("RegistrationService", () => {
     practices.practices.set("practice-1", Practice.create("practice-1", "GP"));
     notifier = new SpyNotifier();
     tokenSigner = new FakeRegistrationLinkTokenSigner();
+    encrypter = new TestEncrypter();
     service = new RegistrationService(
       registrationRequests,
       registrationLinks,
@@ -228,6 +259,7 @@ describe("RegistrationService", () => {
       practices,
       notifier,
       new DeterministicHasher(),
+      encrypter,
       tokenSigner,
       new FakeRegistrationLinkFormatter(),
     );
@@ -258,7 +290,7 @@ describe("RegistrationService", () => {
     expect(tokenSigner.signed[0].registrationLinkId).toBe("link-1");
     expect(notifier.notifications).toEqual([
       {
-        recipient: hashedRsaId,
+        recipient: "patient@example.com",
         body: "Open https://patient-reg.test/registration/token:link-1 in your browser to continue registration (request registration-1).",
       },
     ]);
@@ -273,6 +305,7 @@ describe("RegistrationService", () => {
       practices,
       notifier,
       new DeterministicHasher(),
+      encrypter,
       tokenSigner,
       new FakeRegistrationLinkFormatter(),
     );
