@@ -9,31 +9,21 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 import { PracticeEntity } from "./practice.entity";
-
-export const registrationRequestStatusValues = [
-  "AWAITING_COMPLETION",
-  "AWAITING_REVIEW",
-  "APPROVED",
-  "REJECTED",
-] as const;
-
-export type RegistrationRequestStatusValue =
-  (typeof registrationRequestStatusValues)[number];
+import { PatientIdentityEntity } from "./patient-identity.entity";
+import { type RegistrationRequestStatusValue, registrationRequestStatusValues } from "../../../../domain/value-objects/registration-status";
 
 @Entity({ name: "registration_requests" })
-@Index(["patientIdentityId", "practiceId"], { unique: true })
+@Index(["patientIdentity", "practice"], { unique: true })
 export class RegistrationRequestEntity {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: "varchar" })
-  patientIdentityId: string;
-
-  @Column({ type: "uuid" })
-  practiceId: string;
+  @ManyToOne(() => PatientIdentityEntity, { nullable: false })
+  @JoinColumn({ name: "patientIdentityId", referencedColumnName: "identity" })
+  patientIdentity: PatientIdentityEntity;
 
   @ManyToOne(() => PracticeEntity, { nullable: false })
-  @JoinColumn({ name: "practiceId" })
+  @JoinColumn({ name: "practiceId", referencedColumnName: "id" })
   practice: PracticeEntity;
 
   @Column({

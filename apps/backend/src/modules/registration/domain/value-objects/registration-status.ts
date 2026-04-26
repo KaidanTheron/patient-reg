@@ -1,5 +1,15 @@
+export const registrationRequestStatusValues = [
+  "AWAITING_COMPLETION",
+  "AWAITING_REVIEW",
+  "APPROVED",
+  "REJECTED",
+] as const;
+
+export type RegistrationRequestStatusValue =
+  (typeof registrationRequestStatusValues)[number];
+
 export class RegistrationStatus {
-  private constructor(private readonly value: string) {}
+  constructor(private readonly value: RegistrationRequestStatusValue) {}
   
   public static awaitingCompletion() {
     return new RegistrationStatus("AWAITING_COMPLETION");
@@ -21,7 +31,7 @@ export class RegistrationStatus {
     return this.value === other.value;
   }
 
-  public toString(): string {
+  public toString(): RegistrationRequestStatusValue {
     return this.value;
   }
 }

@@ -3,41 +3,39 @@ import { RegistrationStatePolicy } from "../policies/registration-state.policy";
 import { HashedRsaId } from "../value-objects/hashed-rsaid";
 import { Practice } from "./practice.entity";
 
-export class NewRegistrationRequest {
-  constructor(
-    public readonly patientIdentityId: HashedRsaId,
-    public readonly practiceId: Practice["id"],
-  ) {}
+export class DraftRegistrationRequest {
+  public readonly patientIdentityId: HashedRsaId;
+  public readonly practiceId: Practice["id"];
+  public readonly status: RegistrationStatus;
+  public readonly rejectionReason?: string;
 
-  public static create(
+  constructor(
     patientIdentityId: HashedRsaId,
-    practiceId: Practice["id"],
+    practiceId: Practice["id"]
   ) {
-    return new NewRegistrationRequest(patientIdentityId, practiceId);
+    this.patientIdentityId = patientIdentityId;
+    this.practiceId = practiceId;
+    this.status = RegistrationStatus.awaitingCompletion();
+    this.rejectionReason = undefined;
   }
 }
 
+export class UpdateRegistrationRequest {
+  constructor(
+    public readonly status: RegistrationStatus,
+    public readonly rejectionReason?: string,
+  ) {}
+}
+
 export class RegistrationRequest {
+
   constructor(
     public readonly id: string,
     public readonly patientIdentityId: HashedRsaId,
     public readonly practiceId: Practice["id"],
     private status: RegistrationStatus,
     private rejectionReason?: string,
-  ) {}
-
-  static create(params: {
-    id: string;
-    patientIdentityId: HashedRsaId;
-    practiceId: Practice["id"];
-  }): RegistrationRequest {
-    return new RegistrationRequest(
-      params.id,
-      params.patientIdentityId,
-      params.practiceId,
-      RegistrationStatus.awaitingCompletion(),
-    );
-  }
+  ) {};
 
   getStatus(): RegistrationStatus {
     return this.status;

@@ -1,11 +1,17 @@
 import { Injectable } from "@nestjs/common";
 import { Practice } from "../../domain/entities/practice.entity";
-import { NewRegistrationRequest } from "../../domain/entities/registration-request.entity";
 import { PatientIdentityRepository } from "../../domain/ports/patient-identity.repository";
 import { PracticeRepository } from "../../domain/ports/practice.repository";
 import { RegistrationRequestRepository } from "../../domain/ports/registration-request.repository";
-import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
 import { Notifier } from "../../domain/ports/notifier";
+import { RegistrationLinkTokenSigner } from "../../domain/ports/registration-link-token.signer";
+import { RegistrationLinkFormatter } from "../../domain/ports/registration-link.formatter";
+import { DraftRegistrationRequest, UpdateRegistrationRequest } from "../../domain/entities/registration-request.entity";
+import { DraftRegistrationLink } from "../../domain/entities/registration-link.entity";
+import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
+import { RsaIdNumber } from "../../domain/value-objects/rsaid";
+import { Hasher } from "../../domain/ports/hasher";
+import { RegistrationLinkRepository } from "../../domain/ports/registration-link.repository";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -27,7 +33,7 @@ export type ApproveRegistrationResult = {
 };
 
 export type InitiateRegistrationCommand = {
-  patientIdentityId: HashedRsaId;
+  patientIdentityId: string;
   practiceId: string;
   initiatedByStaffId: string;
 };
@@ -41,11 +47,16 @@ export type InitiateRegistrationResult = {
 export class RegistrationService {
     constructor(
         private readonly registrationRequests: RegistrationRequestRepository,
+        private readonly registrationLinks: RegistrationLinkRepository,
         private readonly patientIdentities: PatientIdentityRepository,
         private readonly practices: PracticeRepository,
         private readonly notifier: Notifier,
+        private readonly hasher: Hasher,
+        private readonly registrationLinkTokenSigner: RegistrationLinkTokenSigner,
+        private readonly registrationLinkFormatter: RegistrationLinkFormatter,
     ) {}
 
+    // updates registration request status, updates patient record and links patient and practice
     async approveRegistration(
         command: ApproveRegistrationCommand,
     ): Promise<ApproveRegistrationResult> {
@@ -61,7 +72,7 @@ export class RegistrationService {
 
         await this.registrationRequests.update(
             command.registrationRequestId,
-            request,
+            new UpdateRegistrationRequest(request.getStatus()),
         );
 
         return {
@@ -70,28 +81,51 @@ export class RegistrationService {
         };
     }
 
+    // creates registration request, auth link and notifies patient
     async initiateRegistration(
         command: InitiateRegistrationCommand,
     ): Promise<InitiateRegistrationResult> {
-        const { patientIdentityId, practiceId } = command;
-        const patientValid = await this.patientIdentities.exists(patientIdentityId);
+        const { patientIdentityId: rawIdentity, practiceId, initiatedByStaffId } = command;
+        const identity = RsaIdNumber.create(rawIdentity);
+        const hashedIdentity = await HashedRsaId.create(identity, this.hasher);
+
+        const [patientValid, practice] = await Promise.all([
+            this.patientIdentities.exists(hashedIdentity),
+            this.practices.findById(practiceId)
+        ]);
 
         if (!patientValid) {
             throw new Error("Registrant not found.");
         }
 
-        const practice = await this.practices.findById(practiceId);
-
         if (!practice) {
             throw new Error("Practice not found.");
         }
 
-        const newRequest = NewRegistrationRequest.create(
-            patientIdentityId,
+        const newRequest = new DraftRegistrationRequest(
+            hashedIdentity,
             practiceId,
         );
 
         const created = await this.registrationRequests.create(newRequest);
+
+        await this.registrationLinks.revokeActiveForPatient(hashedIdentity);
+
+        const draftLink = DraftRegistrationLink.create(
+            hashedIdentity,
+            initiatedByStaffId,
+        );
+        const link = await this.registrationLinks.create(draftLink);
+
+        const token = this.registrationLinkTokenSigner.sign({
+            registrationLinkId: link.id,
+            expiresAt: link.expiresAt,
+        });
+        const sendableUrl = this.registrationLinkFormatter.format(token);
+        await this.notifier.notify(
+            hashedIdentity.toString(),
+            `Open ${sendableUrl} in your browser to continue registration (request ${created.id}).`,
+        );
 
         return {
             registrationRequestId: created.id,
@@ -128,4 +162,13 @@ export class RegistrationService {
             name: practice.name,
         };
     }
+
+    // accepts registation document
+    async submitRegistration() {};
+
+    // resends registration link for patient
+    async resendRegistrationLink() {};
+
+    // verifies that user is patient corresponding to registration link
+    async verifyRegistration() {};
 }

@@ -2,19 +2,25 @@ import { Injectable } from "@nestjs/common";
 import { RegistrationRequestRepository as Repository } from "../../../../domain/ports/registration-request.repository";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository as TypeOrmRepository } from "typeorm";
+import type { FindOptionsRelations } from "typeorm";
 import {
   RegistrationRequestEntity,
-  RegistrationRequestStatusValue,
 } from "../entities/registration-request.entity";
 import {
-  NewRegistrationRequest,
+    DraftRegistrationRequest,
   RegistrationRequest,
+  UpdateRegistrationRequest,
 } from "src/modules/registration/domain/entities/registration-request.entity";
 import { RegistrationStatus } from "src/modules/registration/domain/value-objects/registration-status";
 import { HashedRsaId } from "src/modules/registration/domain/value-objects/hashed-rsaid";
 
 @Injectable()
 export class RegistrationRequestRepository extends Repository {
+  private static readonly withPatientAndPractice: FindOptionsRelations<RegistrationRequestEntity> = {
+    patientIdentity: true,
+    practice: true,
+  };
+
   constructor(
     @InjectRepository(RegistrationRequestEntity)
     private readonly repo: TypeOrmRepository<RegistrationRequestEntity>,
@@ -23,19 +29,30 @@ export class RegistrationRequestRepository extends Repository {
   }
 
   public async create(
-    request: NewRegistrationRequest,
+    request: DraftRegistrationRequest,
   ): Promise<RegistrationRequest> {
-    const created = await this.repo.save({
-      patientIdentityId: request.patientIdentityId.toString(),
-      practiceId: request.practiceId,
+    const saved = await this.repo.save({
+      patientIdentity: { identity: request.patientIdentityId.toString() },
+      status: request.status.toString() as RegistrationRequestEntity["status"],
+      practice: { id: request.practiceId },
     });
-    return this.toDomain(created);
+    const entity = await this.repo.findOne({
+      where: { id: saved.id },
+      relations: RegistrationRequestRepository.withPatientAndPractice,
+    });
+    if (!entity) {
+      throw new Error("Registration request not found after create");
+    }
+    return this.toDomain(entity);
   }
 
   public async findById(
     id: RegistrationRequest["id"],
   ): Promise<RegistrationRequest | null> {
-    const entity = await this.repo.findOne({ where: { id } });
+    const entity = await this.repo.findOne({
+      where: { id },
+      relations: RegistrationRequestRepository.withPatientAndPractice,
+    });
     return entity ? this.toDomain(entity) : null;
   }
 
@@ -44,53 +61,40 @@ export class RegistrationRequestRepository extends Repository {
     practice: RegistrationRequest["practiceId"],
   ): Promise<RegistrationRequest | null> {
     const entity = await this.repo.findOne({
-      where: { patientIdentityId: patient.toString(), practiceId: practice },
+      where: {
+        patientIdentity: { identity: patient.toString() },
+        practice: { id: practice },
+      },
+      relations: RegistrationRequestRepository.withPatientAndPractice,
     });
     return entity ? this.toDomain(entity) : null;
   }
 
   public async update(
     id: RegistrationRequest["id"],
-    request: Partial<RegistrationRequest>,
+    request: Partial<UpdateRegistrationRequest>,
   ): Promise<void> {
     const payload: Partial<RegistrationRequestEntity> = {
-      patientIdentityId: request.patientIdentityId?.toString(),
-      practiceId: request.practiceId,
-      status: request.getStatus?.().toString() as
-        | RegistrationRequestStatusValue
-        | undefined,
-      rejectionReason: request.getRejectionReason?.(),
+      status: request.status?.toString(),
+      rejectionReason: request.rejectionReason,
     };
 
     await this.repo.update({ id }, payload);
   }
 
   private toDomain(entity: RegistrationRequestEntity): RegistrationRequest {
+    if (!entity.patientIdentity) {
+      throw new Error("Registration request is missing patient identity relation");
+    }
+    if (!entity.practice) {
+      throw new Error("Registration request is missing practice relation");
+    }
     return new RegistrationRequest(
       entity.id,
-      HashedRsaId.fromPersisted(entity.patientIdentityId),
-      entity.practiceId,
-      this.toDomainStatus(entity.status),
+      HashedRsaId.fromPersisted(entity.patientIdentity.identity),
+      entity.practice.id,
+      new RegistrationStatus(entity.status),
       entity.rejectionReason ?? undefined,
     );
-  }
-
-  private toDomainStatus(
-    status: RegistrationRequestStatusValue,
-  ): RegistrationStatus {
-    switch (status) {
-      case "AWAITING_COMPLETION":
-        return RegistrationStatus.awaitingCompletion();
-      case "AWAITING_REVIEW":
-        return RegistrationStatus.awaitingReview();
-      case "APPROVED":
-        return RegistrationStatus.approved();
-      case "REJECTED":
-        return RegistrationStatus.rejected();
-      default: {
-        const exhaustiveCheck: never = status;
-        throw new Error(`Unknown registration status: ${exhaustiveCheck}`);
-      }
-    }
   }
 }

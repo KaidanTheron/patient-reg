@@ -2,9 +2,6 @@ import { Args, Mutation, Query, Resolver } from "@nestjs/graphql";
 import {
   RegistrationService,
 } from "../../application/slices/registration";
-import { Hasher } from "../../domain/ports/hasher";
-import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
-import { RsaIdNumber } from "../../domain/value-objects/rsaid";
 import {
   ApproveRegistrationInput,
   CreatePracticeInput,
@@ -17,7 +14,6 @@ import {
 export class RegistrationResolver {
   constructor(
     private readonly registration: RegistrationService,
-    private readonly hasher: Hasher,
   ) {}
 
   @Mutation(() => PracticePayload)
@@ -31,11 +27,9 @@ export class RegistrationResolver {
   async initiateRegistration(
     @Args("input") input: InitiateRegistrationInput,
   ): Promise<RegistrationRequestPayload> {
-    const rsaId = RsaIdNumber.create(input.rsaId);
-    const patientIdentityId = await HashedRsaId.create(rsaId, this.hasher);
 
     return this.registration.initiateRegistration({
-      patientIdentityId,
+      patientIdentityId: input.rsaId,
       practiceId: input.practiceId,
       initiatedByStaffId: input.initiatedByStaffId,
     });
