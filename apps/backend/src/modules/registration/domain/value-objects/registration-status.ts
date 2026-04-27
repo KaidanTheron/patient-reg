@@ -27,6 +27,21 @@ export class RegistrationStatus {
     return new RegistrationStatus("REJECTED");
   }
 
+  public static fromPersisted(value: string): RegistrationStatus {
+    switch (value) {
+      case "AWAITING_COMPLETION":
+        return RegistrationStatus.awaitingCompletion();
+      case "AWAITING_REVIEW":
+        return RegistrationStatus.awaitingReview();
+      case "APPROVED":
+        return RegistrationStatus.approved();
+      case "REJECTED":
+        return RegistrationStatus.rejected();
+      default:
+        throw new Error(`Unknown registration status: ${value}`);
+    }
+  }
+
   public equals(other: RegistrationStatus): boolean {
     return this.value === other.value;
   }

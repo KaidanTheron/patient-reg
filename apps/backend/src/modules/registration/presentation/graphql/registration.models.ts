@@ -37,6 +37,18 @@ export class ApproveRegistrationInput {
 }
 
 @InputType()
+export class RejectRegistrationInput {
+  @Field()
+  registrationRequestId: string;
+
+  @Field()
+  rejectedByStaffId: string;
+
+  @Field({ description: "Reason given to the patient for the rejection." })
+  reason: string;
+}
+
+@InputType()
 export class ContactDetailsInput {
   @Field(() => String, { nullable: true })
   email?: string;
@@ -108,16 +120,88 @@ export class SubmitRegistrationDocumentInput {
   registrationRequestId: string;
 
   @Field(() => ContactDetailsInput, { nullable: true })
-  contactDetails?: ContactDetailsInput;
+  contactDetails: ContactDetailsInput;
 
   @Field(() => PersonalInformationInput, { nullable: true })
-  personalInformation?: PersonalInformationInput;
+  personalInformation: PersonalInformationInput;
 
   @Field(() => MedicalAidDetailsInput, { nullable: true })
-  medicalAidDetails?: MedicalAidDetailsInput;
+  medicalAidDetails: MedicalAidDetailsInput;
 
   @Field(() => MedicalHistoryInput, { nullable: true })
-  medicalHistory?: MedicalHistoryInput;
+  medicalHistory: MedicalHistoryInput;
+}
+
+@ObjectType()
+export class RegistrationDocumentPayload {
+  @Field()
+  submittedAt: Date;
+
+  @Field(() => String, { nullable: true })
+  email?: string | null;
+
+  @Field(() => String, { nullable: true })
+  phone?: string | null;
+
+  @Field(() => String, { nullable: true })
+  altphone?: string | null;
+
+  @Field(() => String, { nullable: true })
+  residentialAddress?: string | null;
+
+  @Field(() => String, { nullable: true })
+  firstname?: string | null;
+
+  @Field(() => String, { nullable: true })
+  lastname?: string | null;
+
+  @Field(() => String, { nullable: true })
+  dateOfBirth?: string | null;
+
+  @Field(() => String, { nullable: true })
+  gender?: string | null;
+
+  @Field(() => String, { nullable: true })
+  scheme?: string | null;
+
+  @Field(() => String, { nullable: true })
+  memberNumber?: string | null;
+
+  @Field(() => String, { nullable: true })
+  mainMember?: string | null;
+
+  @Field(() => String, { nullable: true })
+  mainMemberId?: string | null;
+
+  @Field(() => String, { nullable: true })
+  dependantCode?: string | null;
+
+  @Field(() => String, { nullable: true })
+  allergies?: string | null;
+
+  @Field(() => String, { nullable: true })
+  currentMedication?: string | null;
+
+  @Field(() => String, { nullable: true })
+  chronicConditions?: string | null;
+
+  @Field(() => String, { nullable: true })
+  previousSurgeries?: string | null;
+
+  @Field(() => String, { nullable: true })
+  familyHistory?: string | null;
+}
+
+@ObjectType()
+export class PatientIdentityPayload {
+  @Field(() => String, { nullable: true })
+  fullName?: string | null;
+
+  @Field(() => String, { nullable: true })
+  email?: string | null;
+
+  @Field(() => String, { nullable: true })
+  phone?: string | null;
 }
 
 @ObjectType()
@@ -134,8 +218,11 @@ export class RegistrationRequestPayload {
   @Field({ nullable: true })
   rejectionReason?: string;
 
-  @Field(() => String, { nullable: true })
-  patientName?: string | null;
+  @Field(() => PatientIdentityPayload, { nullable: true })
+  patient?: PatientIdentityPayload | null;
+
+  @Field(() => RegistrationDocumentPayload, { nullable: true })
+  document?: RegistrationDocumentPayload | null;
 }
 
 @InputType()

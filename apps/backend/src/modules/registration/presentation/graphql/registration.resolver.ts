@@ -1,6 +1,8 @@
 import { ForbiddenException, UseGuards } from "@nestjs/common";
 import { Args, Mutation, Query, Resolver } from "@nestjs/graphql";
-import { RegistrationService } from "~/modules/registration/application/slices/registration";
+import {
+  RegistrationService,
+} from "~/modules/registration/application/slices/registration";
 import type { VerifiedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
 import type { VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
 import {
@@ -15,12 +17,12 @@ import {
   InitiateRegistrationInput,
   PatientProfilePayload,
   PracticePayload,
+  RejectRegistrationInput,
   RegistrationRequestPayload,
   SubmitRegistrationDocumentInput,
   VerifyRegistrationInput,
   VerifyRegistrationPayload,
 } from "~/modules/registration/presentation/graphql/registration.models";
-import { GenderValue, MedicalAidSchemeValue } from "~/modules/registration/domain/value-objects";
 
 @Resolver()
 export class RegistrationResolver {
@@ -62,45 +64,32 @@ export class RegistrationResolver {
   }
 
   @Mutation(() => RegistrationRequestPayload)
+  @UseGuards(PracticeSessionGuard)
+  async rejectRegistration(
+    @Args("input") input: RejectRegistrationInput,
+    @PracticeSession() practiceSession: VerifiedPracticeSession,
+  ): Promise<RegistrationRequestPayload> {
+    return this.registration.rejectRegistration({
+      ...input,
+      practiceSession,
+    });
+  }
+
+  @Mutation(() => RegistrationRequestPayload)
   @UseGuards(PatientSessionGuard)
   async submitRegistrationDocument(
     @Args("input") input: SubmitRegistrationDocumentInput,
     @PatientSession() patientSession: VerifiedPatientSession,
   ): Promise<RegistrationRequestPayload> {
-    const cd = input.contactDetails ?? {};
-    const pi = input.personalInformation ?? {};
-    const ma = input.medicalAidDetails ?? {};
-    const mh = input.medicalHistory ?? {};
+    const { contactDetails, medicalAidDetails, medicalHistory, personalInformation, registrationRequestId } = input;
 
     return this.registration.submitRegistrationDocument({
       patientSession,
-      registrationRequestId: input.registrationRequestId,
-      contactDetails: {
-        email: cd.email,
-        phone: cd.phone,
-        altphone: cd.altphone,
-        residentialAddress: cd.residentialAddress,
-      },
-      personalInformation: {
-        firstname: pi.firstname,
-        lastname: pi.lastname,
-        dateOfBirth: pi.dateOfBirth,
-        gender: pi.gender as GenderValue | undefined,
-      },
-      medicalAidDetails: {
-        scheme: ma.scheme as MedicalAidSchemeValue | undefined,
-        memberNumber: ma.memberNumber,
-        mainMember: ma.mainMember,
-        mainMemberId: ma.mainMemberId,
-        dependantCode: ma.dependantCode,
-      },
-      medicalHistory: {
-        allergies: mh.allergies,
-        currentMedication: mh.currentMedication,
-        chronicConditions: mh.chronicConditions,
-        previousSurgeries: mh.previousSurgeries,
-        familyHistory: mh.familyHistory,
-      },
+      registrationRequestId,
+      contactDetails,
+      personalInformation,
+      medicalAidDetails,
+      medicalHistory,
     });
   }
 
@@ -143,6 +132,21 @@ export class RegistrationResolver {
     return this.registration.deriveDateOfBirthFromRsaId(rsaId);
   }
 
+  /**
+   * Derives gender from a valid 13-digit RSA ID (Luhn). Returns `"MALE"` or
+   * `"FEMALE"` based on digits 7–10 of the ID number.
+   */
+  @Query(() => String, {
+    name: "genderFromRsaId",
+    description:
+      'Gender ("MALE" or "FEMALE") derived from the RSA ID, for form UX.',
+  })
+  genderFromRsaId(
+    @Args("rsaId", { description: "13-digit RSA ID" }) rsaId: string,
+  ): string {
+    return this.registration.deriveGenderFromRsaId(rsaId);
+  }
+
   @Query(() => PracticePayload, { nullable: true })
   async practice(@Args("id") id: string): Promise<PracticePayload | null> {
     return this.registration.findPracticeById(id);
@@ -161,6 +165,15 @@ export class RegistrationResolver {
     return this.registration.findAllPracticeRegRequests(practiceSession);
   }
 
+  @Query(() => RegistrationRequestPayload)
+  @UseGuards(PracticeSessionGuard)
+  async practiceRegistrationRequest(
+    @Args("id") id: string,
+    @PracticeSession() practiceSession: VerifiedPracticeSession,
+  ): Promise<RegistrationRequestPayload> {
+    return this.registration.findPracticeRegRequestById(practiceSession, id);
+  }
+
   @Query(() => [RegistrationRequestPayload])
   @UseGuards(PatientSessionGuard)
   async myRegistrationRequests(
@@ -174,35 +187,24 @@ export class RegistrationResolver {
   async myPatientProfile(
     @PatientSession() patientSession: VerifiedPatientSession,
   ): Promise<PatientProfilePayload> {
-    const d = await this.registration.getPatientDetailsForSession(patientSession);
-    return {
-      contactDetails: {
-        email: d.email ?? null,
-        phone: d.phone ?? null,
-        altphone: d.altphone ?? null,
-        residentialAddress: d.residentialAddress ?? null,
-      },
-      personalInformation: {
-        firstname: d.firstname ?? null,
-        lastname: d.lastname ?? null,
-        dateOfBirth: d.dateOfBirth ?? null,
-        gender: d.gender ?? null,
-      },
-      medicalAidDetails: {
-        scheme: d.scheme ?? null,
-        memberNumber: d.memberNumber ?? null,
-        mainMember: d.mainMember ?? null,
-        mainMemberId: d.mainMemberId ?? null,
-        dependantCode: d.dependantCode ?? null,
-      },
-      medicalHistory: {
-        allergies: d.allergies ?? null,
-        currentMedication: d.currentMedication ?? null,
-        chronicConditions: d.chronicConditions ?? null,
-        previousSurgeries: d.previousSurgeries ?? null,
-        familyHistory: d.familyHistory ?? null,
-      },
-    };
+    return await this.registration.getPatientDetailsForSession({
+      kind: "patient",
+      patientSession,
+    });
+  }
+
+  /** Staff query — returns decrypted patient profile for a given registration request. */
+  @Query(() => PatientProfilePayload)
+  @UseGuards(PracticeSessionGuard)
+  async patientProfile(
+    @Args("registrationRequestId") registrationRequestId: string,
+    @PracticeSession() practiceSession: VerifiedPracticeSession,
+  ): Promise<PatientProfilePayload> {
+    return await this.registration.getPatientDetailsForSession({
+      kind: "practice",
+      practiceSession,
+      registrationRequestId,
+    });
   }
 
   @Query(() => RegistrationRequestPayload)

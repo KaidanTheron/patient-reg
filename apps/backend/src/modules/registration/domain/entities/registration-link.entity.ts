@@ -17,7 +17,8 @@ export class DraftRegistrationLink {
   public readonly maxAttempts: number;
 
   private constructor(patient: HashedRsaId, createdByStaffId: string) {
-    if (!createdByStaffId.trim()) {
+    const trimmedId = createdByStaffId.trim();
+    if (!trimmedId) {
       throw new Error("createdByStaffId is required");
     }
 
@@ -25,7 +26,7 @@ export class DraftRegistrationLink {
     this.attempts = 0;
     this.maxAttempts = MAX_ATTEMPTS;
     this.patient = patient;
-    this.createdByStaffId = createdByStaffId;
+    this.createdByStaffId = trimmedId;
     this.expiresAt = new Date(Date.now() + REGISTRATION_LINK_TTL_MS);
   }
 

@@ -5,6 +5,8 @@ export class Practice {
   ) {}
 
   static create(id: string, name: string): Practice {
-    return new Practice(id, name);
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error("Practice name is required");
+    return new Practice(id, trimmed);
   }
 }

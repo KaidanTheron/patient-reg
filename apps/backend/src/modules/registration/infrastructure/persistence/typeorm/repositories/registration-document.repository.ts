@@ -8,17 +8,7 @@ import {
   RegistrationDocument,
   UpdateRegistrationDocument,
 } from "~/modules/registration/domain/entities/registration-document.entity";
-import {
-  ContactDetails,
-  EncryptedValue,
-  Gender,
-  HashedRsaId,
-  IsoDate,
-  MedicalAidDetails,
-  MedicalAidScheme,
-  MedicalHistory,
-  PersonalInformation,
-} from "~/modules/registration/domain/value-objects";
+
 import { RegistrationDocumentEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/registration-document.entity";
 
 @Injectable()
@@ -39,29 +29,30 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
   async create(
     document: DraftRegistrationDocument,
   ): Promise<RegistrationDocument> {
-    const { contactDetails: cd, personalInformation: pi, medicalAidDetails: ma, medicalHistory: mh } = document;
+    const { contactDetails: cd, personalInformation: pi, medicalAidDetails: ma, medicalHistory: mh } =
+      document.toPersisted();
 
     const saved = await this.repo.save({
       registrationRequest: { id: document.registrationRequestId },
       patientIdentity: { identity: document.patientIdentityId.toString() },
-      email: cd.email?.toPersisted() ?? null,
-      phoneNumber: cd.phone?.toPersisted() ?? null,
-      altphone: cd.altphone?.toPersisted() ?? null,
-      residentialAddress: cd.address?.toPersisted() ?? null,
-      firstname: pi.firstname?.toPersisted() ?? null,
-      lastname: pi.lastname?.toPersisted() ?? null,
-      dateOfBirth: pi.dateOfBirth?.toPersisted() ?? null,
-      gender: pi.gender?.toString() ?? null,
-      scheme: ma.scheme?.toString() ?? null,
-      memberNumber: ma.memberNumber?.toPersisted() ?? null,
-      mainMember: ma.mainMember?.toPersisted() ?? null,
-      mainMemberId: ma.mainMemberId?.toPersisted() ?? null,
-      dependantCode: ma.dependantCode?.toPersisted() ?? null,
-      allergies: mh.allergies?.toPersisted() ?? null,
-      currentMedication: mh.currentMedication?.toPersisted() ?? null,
-      chronicConditions: mh.chronicConditions?.toPersisted() ?? null,
-      previousSurgeries: mh.previousSurgeries?.toPersisted() ?? null,
-      familyHistory: mh.familyHistory?.toPersisted() ?? null,
+      email: cd.email,
+      phoneNumber: cd.phone,
+      altphone: cd.altphone,
+      residentialAddress: cd.address,
+      firstname: pi.firstname,
+      lastname: pi.lastname,
+      dateOfBirth: pi.dateOfBirth,
+      gender: pi.gender,
+      scheme: ma.scheme,
+      memberNumber: ma.memberNumber,
+      mainMember: ma.mainMember,
+      mainMemberId: ma.mainMemberId,
+      dependantCode: ma.dependantCode,
+      allergies: mh.allergies,
+      currentMedication: mh.currentMedication,
+      chronicConditions: mh.chronicConditions,
+      previousSurgeries: mh.previousSurgeries,
+      familyHistory: mh.familyHistory,
       submittedAt: new Date(),
     });
     return this.toDomain(
@@ -86,29 +77,30 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
     id: string,
     update: UpdateRegistrationDocument,
   ): Promise<RegistrationDocument> {
-    const { contactDetails: cd, personalInformation: pi, medicalAidDetails: ma, medicalHistory: mh } = update;
+    const { contactDetails: cd, personalInformation: pi, medicalAidDetails: ma, medicalHistory: mh } =
+      update.toPersisted();
 
     await this.repo.update(
       { id },
       {
-        email: cd.email?.toPersisted() ?? null,
-        phoneNumber: cd.phone?.toPersisted() ?? null,
-        altphone: cd.altphone?.toPersisted() ?? null,
-        residentialAddress: cd.address?.toPersisted() ?? null,
-        firstname: pi.firstname?.toPersisted() ?? null,
-        lastname: pi.lastname?.toPersisted() ?? null,
-        dateOfBirth: pi.dateOfBirth?.toPersisted() ?? null,
-        gender: pi.gender?.toString() ?? null,
-        scheme: ma.scheme?.toString() ?? null,
-        memberNumber: ma.memberNumber?.toPersisted() ?? null,
-        mainMember: ma.mainMember?.toPersisted() ?? null,
-        mainMemberId: ma.mainMemberId?.toPersisted() ?? null,
-        dependantCode: ma.dependantCode?.toPersisted() ?? null,
-        allergies: mh.allergies?.toPersisted() ?? null,
-        currentMedication: mh.currentMedication?.toPersisted() ?? null,
-        chronicConditions: mh.chronicConditions?.toPersisted() ?? null,
-        previousSurgeries: mh.previousSurgeries?.toPersisted() ?? null,
-        familyHistory: mh.familyHistory?.toPersisted() ?? null,
+        email: cd.email,
+        phoneNumber: cd.phone,
+        altphone: cd.altphone,
+        residentialAddress: cd.address,
+        firstname: pi.firstname,
+        lastname: pi.lastname,
+        dateOfBirth: pi.dateOfBirth,
+        gender: pi.gender,
+        scheme: ma.scheme,
+        memberNumber: ma.memberNumber,
+        mainMember: ma.mainMember,
+        mainMemberId: ma.mainMemberId,
+        dependantCode: ma.dependantCode,
+        allergies: mh.allergies,
+        currentMedication: mh.currentMedication,
+        chronicConditions: mh.chronicConditions,
+        previousSurgeries: mh.previousSurgeries,
+        familyHistory: mh.familyHistory,
         submittedAt: update.submittedAt,
       },
     );
@@ -127,42 +119,29 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
     if (!entity.patientIdentity || !entity.registrationRequest) {
       throw new Error("Registration document is missing relations");
     }
-
-    const e = entity;
-
-    return new RegistrationDocument(
-      e.id,
-      e.registrationRequest.id,
-      HashedRsaId.fromPersisted(e.patientIdentity.identity),
-      ContactDetails.create({
-        email: e.email ? EncryptedValue.fromPersisted(e.email) : undefined,
-        phone: e.phoneNumber ? EncryptedValue.fromPersisted(e.phoneNumber) : undefined,
-        altphone: e.altphone ? EncryptedValue.fromPersisted(e.altphone) : undefined,
-        address: e.residentialAddress ? EncryptedValue.fromPersisted(e.residentialAddress) : undefined,
-      }),
-      PersonalInformation.create({
-        firstname: e.firstname ? EncryptedValue.fromPersisted(e.firstname) : undefined,
-        lastname: e.lastname ? EncryptedValue.fromPersisted(e.lastname) : undefined,
-        dateOfBirth: e.dateOfBirth
-          ? EncryptedValue.fromPersisted(e.dateOfBirth, IsoDate.fromSerialized)
-          : undefined,
-        gender: e.gender ? Gender.fromPersisted(e.gender) : undefined,
-      }),
-      MedicalAidDetails.create({
-        scheme: e.scheme ? MedicalAidScheme.fromPersisted(e.scheme) : undefined,
-        memberNumber: e.memberNumber ? EncryptedValue.fromPersisted(e.memberNumber) : undefined,
-        mainMember: e.mainMember ? EncryptedValue.fromPersisted(e.mainMember) : undefined,
-        mainMemberId: e.mainMemberId ? EncryptedValue.fromPersisted(e.mainMemberId) : undefined,
-        dependantCode: e.dependantCode ? EncryptedValue.fromPersisted(e.dependantCode) : undefined,
-      }),
-      MedicalHistory.create({
-        allergies: e.allergies ? EncryptedValue.fromPersisted(e.allergies) : undefined,
-        currentMedication: e.currentMedication ? EncryptedValue.fromPersisted(e.currentMedication) : undefined,
-        chronicConditions: e.chronicConditions ? EncryptedValue.fromPersisted(e.chronicConditions) : undefined,
-        previousSurgeries: e.previousSurgeries ? EncryptedValue.fromPersisted(e.previousSurgeries) : undefined,
-        familyHistory: e.familyHistory ? EncryptedValue.fromPersisted(e.familyHistory) : undefined,
-      }),
-      e.submittedAt,
-    );
+    return RegistrationDocument.fromPersisted({
+      id: entity.id,
+      registrationRequestId: entity.registrationRequest.id,
+      patientIdentityId: entity.patientIdentity.identity,
+      email: entity.email,
+      phoneNumber: entity.phoneNumber,
+      altphone: entity.altphone,
+      residentialAddress: entity.residentialAddress,
+      firstname: entity.firstname,
+      lastname: entity.lastname,
+      dateOfBirth: entity.dateOfBirth,
+      gender: entity.gender,
+      scheme: entity.scheme,
+      memberNumber: entity.memberNumber,
+      mainMember: entity.mainMember,
+      mainMemberId: entity.mainMemberId,
+      dependantCode: entity.dependantCode,
+      allergies: entity.allergies,
+      currentMedication: entity.currentMedication,
+      chronicConditions: entity.chronicConditions,
+      previousSurgeries: entity.previousSurgeries,
+      familyHistory: entity.familyHistory,
+      submittedAt: entity.submittedAt,
+    });
   }
 }

@@ -24,10 +24,7 @@ export class MedicalAidScheme {
 	}
 
 	static fromPersisted(value: string): MedicalAidScheme {
-		if (!medicalAidSchemeValues.includes(value as MedicalAidSchemeValue)) {
-			throw new Error(`Unknown medical aid scheme: ${value}`);
-		}
-		return new MedicalAidScheme(value as MedicalAidSchemeValue);
+		return MedicalAidScheme.create(value);
 	}
 
 	toString(): string {

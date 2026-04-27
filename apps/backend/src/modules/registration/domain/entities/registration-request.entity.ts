@@ -72,11 +72,12 @@ export class RegistrationRequest {
       throw new Error("Only submitted registrations can be rejected");
     }
 
-    if (!reason.trim()) {
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
       throw new Error("Rejection reason is required");
     }
 
     this.status = RegistrationStatus.rejected();
-    this.rejectionReason = reason;
+    this.rejectionReason = trimmedReason;
   }
 }

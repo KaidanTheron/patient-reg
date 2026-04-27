@@ -15,7 +15,9 @@ export class PracticeRepository extends Repository {
   }
 
   async create(name: DomainPractice["name"]): Promise<DomainPractice> {
-    const created = await this.repo.save({ name });
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error("Practice name is required");
+    const created = await this.repo.save({ name: trimmed });
     return this.toDomain(created);
   }
 

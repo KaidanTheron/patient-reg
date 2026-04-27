@@ -80,8 +80,8 @@ class InMemoryRegistrationRequestRepository extends RegistrationRequestRepositor
         (request) =>
           request.patientIdentityId.equals(patient) &&
           request.practiceId === practice,
-      ) ?? null
-    );
+      )
+    ) ?? null;
   }
 
   async findAllByPracticeId(
@@ -152,8 +152,8 @@ class InMemoryRegistrationLinkRepository extends RegistrationLinkRepository {
         (link) =>
           link.patient.equals(patient) &&
           link.getStatus().equals(RegistrationLinkStatus.active()),
-      ) ?? null
-    );
+      )
+    ) ?? null;
   }
 
   async revokeActiveForPatient(
@@ -315,8 +315,8 @@ class InMemoryRegistrationDocumentRepository extends RegistrationDocumentReposit
     return (
       [...this.byId.values()].find(
         (d) => d.registrationRequestId === registrationRequestId,
-      ) ?? null
-    );
+      )
+    ) ?? null;
   }
 
   async create(
@@ -741,8 +741,8 @@ describe("RegistrationService", () => {
     expect(list[1].registrationRequestStatus).toBe("AWAITING_REVIEW");
     expect(list[1].rejectionReason).toBeUndefined();
     expect(list[1].practiceName).toBe("GP");
-    expect(list[0].patientName).toBeNull();
-    expect(list[1].patientName).toBeNull();
+    expect(list[0].patient).toBeNull();
+    expect(list[1].patient).toBeNull();
   });
 
   it("throws when listing registration requests for an unknown practice", async () => {
@@ -794,14 +794,14 @@ describe("RegistrationService", () => {
           registrationRequestId: "req-mr-1",
           registrationRequestStatus: "AWAITING_COMPLETION",
           practiceName: "GP",
-          patientName: null,
+          patient: expect.objectContaining({ email: "patient@example.com" }),
         }),
         expect.objectContaining({
           registrationRequestId: "req-mr-2",
           registrationRequestStatus: "REJECTED",
           rejectionReason: "bad",
           practiceName: "P2",
-          patientName: null,
+          patient: expect.objectContaining({ email: "patient@example.com" }),
         }),
       ]),
     );
@@ -824,11 +824,12 @@ describe("RegistrationService", () => {
       patientSession,
       "req-single-1",
     );
-    expect(item).toEqual({
+    expect(item).toMatchObject({
       registrationRequestId: "req-single-1",
       registrationRequestStatus: "AWAITING_COMPLETION",
       practiceName: "GP",
-      patientName: null,
+      patient: expect.objectContaining({ email: "patient@example.com" }),
+      document: null,
     });
   });
 
@@ -870,7 +871,7 @@ describe("RegistrationService", () => {
     }
     const patientSession =
       await protectedPatientSession.verify("sess:prof-link");
-    const details = await service.getPatientDetailsForSession(patientSession);
+    const details = await service.getPatientDetailsForSession({ kind: "patient", patientSession });
     expect(details).toMatchObject({
       email: "patient@example.com",
       phone: undefined,
@@ -890,7 +891,7 @@ describe("RegistrationService", () => {
     });
     const patientSession = await protectedPatientSession.verify("sess:no-pi");
     await expect(
-      service.getPatientDetailsForSession(patientSession),
+      service.getPatientDetailsForSession({ kind: "patient", patientSession }),
     ).rejects.toThrow("Patient not found");
   });
 
@@ -958,7 +959,7 @@ describe("RegistrationService", () => {
       expect.arrayContaining([
         expect.objectContaining({
           registrationRequestId: "req-doc-1",
-          patientName: null,
+          patient: expect.objectContaining({ email: "patient@example.com" }),
         }),
       ]),
     );

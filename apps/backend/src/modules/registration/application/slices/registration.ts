@@ -30,9 +30,9 @@ import { Encrypter } from "~/modules/registration/domain/ports/encrypter";
 import { DraftPatientPractice } from "~/modules/registration/domain/entities/patient-practice.entity";
 import { PatientPracticeRepository } from "~/modules/registration/domain/ports/patient-practice.repository";
 import { RegistrationDocumentRepository } from "~/modules/registration/domain/ports/registration-document.repository";
-import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
 import {
   DraftRegistrationDocument,
+  RegistrationDocument,
   UpdateRegistrationDocument,
 } from "~/modules/registration/domain/entities/registration-document.entity";
 import {
@@ -42,15 +42,14 @@ import {
 import { type VerifiedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
 import { type VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
 import { formatLocalDateAsIsoDate } from "~/common/date";
-import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
 import {
   ContactDetails,
-  Gender,
   MedicalAidDetails,
-  MedicalAidScheme,
   MedicalHistory,
   PersonalInformation,
 } from "~/modules/registration/domain/value-objects";
+import { DecryptedPatientProfile } from "~/modules/registration/domain/entities/patient-profile.helpers";
+import { NonFunctionProperties } from "~/common/typing";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -72,6 +71,21 @@ export type ApproveRegistrationResult = {
   registrationRequestId: string;
   registrationRequestStatus: string;
   practiceName: string;
+};
+
+export type RejectRegistrationCommand = {
+  /** Set from GraphQL `PracticeSessionGuard` / `@PracticeSession()`. */
+  practiceSession: VerifiedPracticeSession;
+  registrationRequestId: string;
+  rejectedByStaffId: string;
+  reason: string;
+};
+
+export type RejectRegistrationResult = {
+  registrationRequestId: string;
+  registrationRequestStatus: string;
+  practiceName: string;
+  rejectionReason: string;
 };
 
 export type InitiateRegistrationCommand = {
@@ -133,13 +147,52 @@ export type SubmitRegistrationDocumentResult = {
   practiceName: string;
 };
 
+type PatientProfile = Omit<Awaited<ReturnType<RegistrationDocument["decrypt"]>>, "registrationRequestId" | "submittedAt">;
+
+// /** Flat decrypted patient profile fields shared across session-facing DTOs. */
+// type FlatPatientProfile = {
+//   // ContactDetails
+//   email?: string;
+//   phone?: string;
+//   altphone?: string;
+//   residentialAddress?: string;
+//   // PersonalInformation
+//   firstname?: string;
+//   lastname?: string;
+//   dateOfBirth?: string;
+//   gender?: string;
+//   // MedicalAidDetails
+//   scheme?: string;
+//   memberNumber?: string;
+//   mainMember?: string;
+//   mainMemberId?: string;
+//   dependantCode?: string;
+//   // MedicalHistory
+//   allergies?: string;
+//   currentMedication?: string;
+//   chronicConditions?: string;
+//   previousSurgeries?: string;
+//   familyHistory?: string;
+// };
+
+/** Decrypted fields from the submitted registration document; absent when not yet submitted. */
+export type SubmittedDocumentDetails = PatientProfile & { submittedAt: Date };
+
+/** Decrypted fields from the patient identity row. */
+export type PatientIdentityDetails = {
+  fullName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
 export type RegistrationRequestListItem = {
   registrationRequestId: string;
   registrationRequestStatus: string;
   rejectionReason?: string;
   practiceName: string;
-  /** Decrypted from patient identity; absent before first document submit. */
-  patientName?: string | null;
+  patient?: PatientIdentityDetails | null;
+  /** Decrypted registration document; absent when not yet submitted. */
+  document?: SubmittedDocumentDetails | null;
 };
 
 export type VerifyRegistrationCommand = {
@@ -173,30 +226,7 @@ export type VerifyRegistrationResult =
     };
 
 /** Decrypted profile fields for the session's patient; sourced from the canonical patient record. */
-export type PatientSessionDetails = {
-  // ContactDetails
-  email?: string;
-  phone?: string;
-  altphone?: string;
-  residentialAddress?: string;
-  // PersonalInformation
-  firstname?: string;
-  lastname?: string;
-  dateOfBirth?: string;
-  gender?: string;
-  // MedicalAidDetails
-  scheme?: string;
-  memberNumber?: string;
-  mainMember?: string;
-  mainMemberId?: string;
-  dependantCode?: string;
-  // MedicalHistory
-  allergies?: string;
-  currentMedication?: string;
-  chronicConditions?: string;
-  previousSurgeries?: string;
-  familyHistory?: string;
-};
+export type PatientDetailsForAuthorizedSession = PatientProfile;
 
 @Injectable()
 export class RegistrationService {
@@ -220,19 +250,10 @@ export class RegistrationService {
   async approveRegistration(
     command: ApproveRegistrationCommand,
   ): Promise<ApproveRegistrationResult> {
-    const request = await this.registrationRequests.findById(
+    const request = await this.findRequestForPractice(
       command.registrationRequestId,
+      command.practiceSession.practiceId,
     );
-
-    if (!request) {
-      throw new Error("Registration request not found");
-    }
-
-    if (request.practiceId !== command.practiceSession.practiceId) {
-      throw new ForbiddenException(
-        "Registration request does not belong to this practice",
-      );
-    }
 
     request.approve();
 
@@ -240,7 +261,7 @@ export class RegistrationService {
       command.registrationRequestId,
       new UpdateRegistrationRequest(
         request.getStatus(),
-        request.getRejectionReason() ?? null,
+        request.getRejectionReason(),
       ),
     );
 
@@ -264,7 +285,7 @@ export class RegistrationService {
       await this.patientRecords.ensureFromIdentity(
         new DraftPatientRecord(
           request.patientIdentityId,
-          ContactDetails.create({ email: identity.email, phone: identity.phone }),
+          ContactDetails.create(identity),
           PersonalInformation.create({}),
           MedicalAidDetails.create({}),
           MedicalHistory.create({}),
@@ -295,8 +316,48 @@ export class RegistrationService {
     };
   }
 
-  // rejects a registration submission
-  async rejectRegistration() {}
+  async rejectRegistration(
+    command: RejectRegistrationCommand,
+  ): Promise<RejectRegistrationResult> {
+    const request = await this.findRequestForPractice(
+      command.registrationRequestId,
+      command.practiceSession.practiceId,
+    );
+
+    request.reject(command.reason);
+
+    await this.registrationRequests.update(
+      command.registrationRequestId,
+      new UpdateRegistrationRequest(
+        request.getStatus(),
+        request.getRejectionReason(),
+      ),
+    );
+
+    const identity = await this.patientIdentities.findById(
+      request.patientIdentityId,
+    );
+    if (identity) {
+      const rawEmail = await identity.email?.decrypt(this.encrypter);
+      const rawPhone = await identity.phone?.decrypt(this.encrypter);
+      const recipient = rawEmail ?? rawPhone;
+      if (recipient) {
+        await this.notifier.notify(
+          recipient,
+          `Your registration request (${request.id}) has been rejected. Reason: ${command.reason}.`,
+        );
+      }
+    }
+
+    const practiceName = await this.resolvePracticeName(request.practiceId);
+
+    return {
+      registrationRequestId: request.id,
+      registrationRequestStatus: request.getStatus().toString(),
+      practiceName,
+      rejectionReason: request.getRejectionReason()!,
+    };
+  }
 
   // creates registration request, auth link and notifies patient
   async initiateRegistration(
@@ -369,12 +430,7 @@ export class RegistrationService {
   async createPractice(
     command: CreatePracticeCommand,
   ): Promise<PracticeResult> {
-    if (!command.name.trim()) {
-      throw new Error("Practice name is required");
-    }
-
-    const practice = await this.practices.create(command.name.trim());
-
+    const practice = await this.practices.create(command.name);
     return this.toPracticeResult(practice);
   }
 
@@ -413,6 +469,25 @@ export class RegistrationService {
   }
 
   /**
+   * Loads a single registration request for the verified practice session.
+   * Throws {@link ForbiddenException} when the request belongs to a different practice.
+   */
+  async findPracticeRegRequestById(
+    practiceSession: VerifiedPracticeSession,
+    registrationRequestId: string,
+  ): Promise<RegistrationRequestListItem> {
+    const request = await this.findRequestForPractice(
+      registrationRequestId,
+      practiceSession.practiceId,
+    );
+    const practice = await this.practices.findById(practiceSession.practiceId);
+    if (!practice) {
+      throw new Error("Practice not found.");
+    }
+    return this.toRegistrationRequestListItemWithIdentity(request, practice.name);
+  }
+
+  /**
    * Lists registration requests for the verified patient session.
    *
    * Callers must pass a {@link VerifiedPatientSession} from
@@ -443,15 +518,10 @@ export class RegistrationService {
     patientSession: VerifiedPatientSession,
     registrationRequestId: string,
   ): Promise<RegistrationRequestListItem> {
-    const request = await this.registrationRequests.findById(
+    const request = await this.findRequestForPatient(
       registrationRequestId,
+      patientSession.patientIdentityId,
     );
-    if (!request) {
-      throw new Error("Registration request not found");
-    }
-    if (!patientSession.patientIdentityId.equals(request.patientIdentityId)) {
-      throw new Error("Session is not valid for this registration request");
-    }
     const practiceName = await this.resolvePracticeName(request.practiceId);
     return this.toRegistrationRequestListItemWithIdentity(
       request,
@@ -472,88 +542,20 @@ export class RegistrationService {
     command: SubmitRegistrationDocumentCommand,
   ): Promise<SubmitRegistrationDocumentResult> {
     const { patientIdentityId } = command.patientSession;
-    const request = await this.registrationRequests.findById(
+    const request = await this.findRequestForPatient(
       command.registrationRequestId,
+      patientIdentityId,
     );
-    if (!request) {
-      throw new Error("Registration request not found");
-    }
-    if (!patientIdentityId.equals(request.patientIdentityId)) {
-      throw new Error("Session is not valid for this registration request");
-    }
 
-    // ── ContactDetails ──────────────────────────────────────────────────────
     const { contactDetails: cd, personalInformation: pi } = command;
     const { medicalAidDetails: ma, medicalHistory: mh } = command;
 
-    const [encEmail, encPhone, encAltphone, encAddress] = await Promise.all([
-      cd.email ? EncryptedValue.create(cd.email.trim(), this.encrypter) : undefined,
-      cd.phone ? EncryptedValue.create(cd.phone.trim(), this.encrypter) : undefined,
-      cd.altphone ? EncryptedValue.create(cd.altphone.trim(), this.encrypter) : undefined,
-      cd.residentialAddress ? EncryptedValue.create(cd.residentialAddress.trim(), this.encrypter) : undefined,
-    ]);
-
-    const contactDetailsVo = ContactDetails.create({
-      email: encEmail,
-      phone: encPhone,
-      altphone: encAltphone,
-      address: encAddress,
-    });
-
-    // ── PersonalInformation ─────────────────────────────────────────────────
-    const [encFirstname, encLastname, encDob] = await Promise.all([
-      pi.firstname ? EncryptedValue.create(pi.firstname.trim(), this.encrypter) : undefined,
-      pi.lastname ? EncryptedValue.create(pi.lastname.trim(), this.encrypter) : undefined,
-      pi.dateOfBirth
-        ? EncryptedValue.create(
-            IsoDate.fromSerialized(pi.dateOfBirth.trim()),
-            this.encrypter,
-            IsoDate.fromSerialized,
-          )
-        : undefined,
-    ]);
-
-    const personalInformationVo = PersonalInformation.create({
-      firstname: encFirstname,
-      lastname: encLastname,
-      dateOfBirth: encDob,
-      gender: pi.gender ? Gender.create(pi.gender) : undefined,
-    });
-
-    // ── MedicalAidDetails ───────────────────────────────────────────────────
-    const [encMemberNumber, encMainMember, encMainMemberId, encDependantCode] =
-      await Promise.all([
-        ma.memberNumber ? EncryptedValue.create(ma.memberNumber.trim(), this.encrypter) : undefined,
-        ma.mainMember ? EncryptedValue.create(ma.mainMember.trim(), this.encrypter) : undefined,
-        ma.mainMemberId ? EncryptedValue.create(ma.mainMemberId.trim(), this.encrypter) : undefined,
-        ma.dependantCode ? EncryptedValue.create(ma.dependantCode.trim(), this.encrypter) : undefined,
-      ]);
-
-    const medicalAidDetailsVo = MedicalAidDetails.create({
-      scheme: ma.scheme ? MedicalAidScheme.create(ma.scheme) : undefined,
-      memberNumber: encMemberNumber,
-      mainMember: encMainMember,
-      mainMemberId: encMainMemberId,
-      dependantCode: encDependantCode,
-    });
-
-    // ── MedicalHistory ──────────────────────────────────────────────────────
-    const [encAllergies, encMedication, encChronic, encSurgeries, encFamily] =
-      await Promise.all([
-        mh.allergies ? EncryptedValue.create(mh.allergies.trim(), this.encrypter) : undefined,
-        mh.currentMedication ? EncryptedValue.create(mh.currentMedication.trim(), this.encrypter) : undefined,
-        mh.chronicConditions ? EncryptedValue.create(mh.chronicConditions.trim(), this.encrypter) : undefined,
-        mh.previousSurgeries ? EncryptedValue.create(mh.previousSurgeries.trim(), this.encrypter) : undefined,
-        mh.familyHistory ? EncryptedValue.create(mh.familyHistory.trim(), this.encrypter) : undefined,
-      ]);
-
-    const medicalHistoryVo = MedicalHistory.create({
-      allergies: encAllergies,
-      currentMedication: encMedication,
-      chronicConditions: encChronic,
-      previousSurgeries: encSurgeries,
-      familyHistory: encFamily,
-    });
+    const profileParams = {
+      contactDetails: { email: cd.email, phone: cd.phone, altphone: cd.altphone, address: cd.residentialAddress },
+      personalInformation: { ...pi },
+      medicalAidDetails: { ...ma },
+      medicalHistory: { ...mh },
+    };
 
     request.submit(patientIdentityId);
 
@@ -562,23 +564,16 @@ export class RegistrationService {
     if (existing) {
       await this.registrationDocuments.update(
         existing.id,
-        new UpdateRegistrationDocument(
-          contactDetailsVo,
-          personalInformationVo,
-          medicalAidDetailsVo,
-          medicalHistoryVo,
-          new Date(),
+        await UpdateRegistrationDocument.fromRaw(
+          { ...profileParams, submittedAt: new Date() },
+          this.encrypter,
         ),
       );
     } else {
       await this.registrationDocuments.create(
-        new DraftRegistrationDocument(
-          request.id,
-          request.patientIdentityId,
-          contactDetailsVo,
-          personalInformationVo,
-          medicalAidDetailsVo,
-          medicalHistoryVo,
+        await DraftRegistrationDocument.fromRaw(
+          { ...profileParams, registrationRequestId: request.id, patientIdentityId: request.patientIdentityId },
+          this.encrypter,
         ),
       );
     }
@@ -587,7 +582,7 @@ export class RegistrationService {
       request.id,
       new UpdateRegistrationRequest(
         request.getStatus(),
-        request.getRejectionReason() ?? null,
+        request.getRejectionReason(),
       ),
     );
 
@@ -731,67 +726,40 @@ export class RegistrationService {
   }
 
   /**
-   * Returns decrypted contact details for the patient associated with a
-   * {@link VerifiedPatientSession} (e.g. from the patient session guard).
+   * Returns decrypted patient details. Accepts either:
+   * - a {@link VerifiedPatientSession} — the patient sees their own record, or
+   * - a {@link VerifiedPracticeSession} + `registrationRequestId` — staff see the
+   *   record for a request that belongs to their practice.
    */
   async getPatientDetailsForSession(
-    patientSession: VerifiedPatientSession,
-  ): Promise<PatientSessionDetails> {
+    session:
+      | { kind: "patient"; patientSession: VerifiedPatientSession }
+      | {
+          kind: "practice";
+          practiceSession: VerifiedPracticeSession;
+          registrationRequestId: string;
+        },
+  ): Promise<PatientDetailsForAuthorizedSession> {
+    let patientIdentityId: HashedRsaId;
+
+    if (session.kind === "patient") {
+      patientIdentityId = session.patientSession.patientIdentityId;
+    } else {
+      const request = await this.findRequestForPractice(
+        session.registrationRequestId,
+        session.practiceSession.practiceId,
+      );
+      patientIdentityId = request.patientIdentityId;
+    }
+
     const record = await this.patientRecords.findByPatientIdentity(
-      patientSession.patientIdentityId,
+      patientIdentityId,
     );
     if (!record) {
       throw new Error("Patient not found");
     }
 
-    const { contactDetails: cd, personalInformation: pi, medicalAidDetails: ma, medicalHistory: mh } = record;
-
-    const [
-      email, phone, altphone, residentialAddress,
-      firstname, lastname, dateOfBirth, gender,
-      scheme, memberNumber, mainMember, mainMemberId, dependantCode,
-      allergies, currentMedication, chronicConditions, previousSurgeries, familyHistory,
-    ] = await Promise.all([
-      cd.email?.decrypt(this.encrypter),
-      cd.phone?.decrypt(this.encrypter),
-      cd.altphone?.decrypt(this.encrypter),
-      cd.address?.decrypt(this.encrypter),
-      pi.firstname?.decrypt(this.encrypter),
-      pi.lastname?.decrypt(this.encrypter),
-      pi.dateOfBirth?.decrypt(this.encrypter).then((d) => d.serialize()),
-      Promise.resolve(pi.gender?.toString()),
-      Promise.resolve(ma.scheme?.toString()),
-      ma.memberNumber?.decrypt(this.encrypter),
-      ma.mainMember?.decrypt(this.encrypter),
-      ma.mainMemberId?.decrypt(this.encrypter),
-      ma.dependantCode?.decrypt(this.encrypter),
-      mh.allergies?.decrypt(this.encrypter),
-      mh.currentMedication?.decrypt(this.encrypter),
-      mh.chronicConditions?.decrypt(this.encrypter),
-      mh.previousSurgeries?.decrypt(this.encrypter),
-      mh.familyHistory?.decrypt(this.encrypter),
-    ]);
-
-    return {
-      email,
-      phone,
-      altphone,
-      residentialAddress,
-      firstname,
-      lastname,
-      dateOfBirth,
-      gender,
-      scheme,
-      memberNumber,
-      mainMember,
-      mainMemberId,
-      dependantCode,
-      allergies,
-      currentMedication,
-      chronicConditions,
-      previousSurgeries,
-      familyHistory,
-    };
+    return await record.decrypt(this.encrypter);
   }
 
   /**
@@ -802,6 +770,44 @@ export class RegistrationService {
     const rsaId = RsaIdNumber.create(identity);
     const d = rsaId.deriveDateOfBirth();
     return formatLocalDateAsIsoDate(d);
+  }
+
+  /**
+   * Returns the gender implied by a valid RSA ID as `"MALE"` or `"FEMALE"`.
+   */
+  deriveGenderFromRsaId(identity: string): string {
+    const rsaId = RsaIdNumber.create(identity);
+    return rsaId.deriveGender().toString();
+  }
+
+  private async findRequestForPractice(
+    requestId: string,
+    practiceId: string,
+  ): Promise<RegistrationRequest> {
+    const request = await this.registrationRequests.findById(requestId);
+    if (!request) {
+      throw new Error("Registration request not found");
+    }
+    if (request.practiceId !== practiceId) {
+      throw new ForbiddenException(
+        "Registration request does not belong to this practice",
+      );
+    }
+    return request;
+  }
+
+  private async findRequestForPatient(
+    requestId: string,
+    patientIdentityId: HashedRsaId,
+  ): Promise<RegistrationRequest> {
+    const request = await this.registrationRequests.findById(requestId);
+    if (!request) {
+      throw new Error("Registration request not found");
+    }
+    if (!patientIdentityId.equals(request.patientIdentityId)) {
+      throw new Error("Session is not valid for this registration request");
+    }
+    return request;
   }
 
   private toPracticeResult(practice: Practice): PracticeResult {
@@ -824,7 +830,8 @@ export class RegistrationService {
   private toRegistrationRequestListItem(
     request: RegistrationRequest,
     practiceName: string,
-    patientName?: string | null,
+    patient?: PatientIdentityDetails | null,
+    document?: SubmittedDocumentDetails | null,
   ): RegistrationRequestListItem {
     const rejectionReason = request.getRejectionReason();
     return {
@@ -832,7 +839,8 @@ export class RegistrationService {
       registrationRequestStatus: request.getStatus().toString(),
       practiceName,
       rejectionReason,
-      patientName: patientName ?? null,
+      patient: patient,
+      document: document,
     };
   }
 
@@ -840,17 +848,23 @@ export class RegistrationService {
     request: RegistrationRequest,
     practiceName: string,
   ): Promise<RegistrationRequestListItem> {
-    const identity = await this.patientIdentities.findById(
-      request.patientIdentityId,
-    );
-    let patientName: string | null = null;
-    if (identity?.fullName) {
-      patientName = (await identity.fullName.decrypt(this.encrypter)) ?? null;
+    const [identity, doc] = await Promise.all([
+      this.patientIdentities.findById(request.patientIdentityId),
+      this.registrationDocuments.findByRegistrationRequestId(request.id),
+    ]);
+
+    let patient: PatientIdentityDetails | null = null;
+    if (identity) {
+      const [fullName, email, phone] = await Promise.all([
+        identity.fullName?.decrypt(this.encrypter),
+        identity.email?.decrypt(this.encrypter),
+        identity.phone?.decrypt(this.encrypter),
+      ]);
+      patient = { fullName, email, phone };
     }
-    return this.toRegistrationRequestListItem(
-      request,
-      practiceName,
-      patientName,
-    );
+
+    const document = doc ? await doc.decrypt(this.encrypter) : null;
+
+    return this.toRegistrationRequestListItem(request, practiceName, patient, document);
   }
 }

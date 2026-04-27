@@ -13,10 +13,7 @@ export class Gender {
 	}
 
 	static fromPersisted(value: string): Gender {
-		if (!genderValues.includes(value as GenderValue)) {
-			throw new Error(`Unknown gender value: ${value}`);
-		}
-		return new Gender(value as GenderValue);
+		return Gender.create(value);
 	}
 
 	toString(): string {

@@ -1,3 +1,5 @@
+import { Gender } from "./gender";
+
 const luhn = (id: string) => {
   const checksum = Number(id[12]);
   const checkString = id.slice(0, 12);
@@ -50,6 +52,14 @@ export class RsaIdNumber {
     const century = yy <= currentYear ? 2000 : 1900;
 
     return new Date(century + yy, mm - 1, dd);
+  }
+
+  deriveGender(): Gender {
+    if (Number(this.value[6]) < 5) {
+      return Gender.create("FEMALE");
+    }
+
+    return Gender.create("MALE");
   }
 
   toString(): string {
