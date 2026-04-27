@@ -1,9 +1,9 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Practice as DomainPractice } from "src/modules/registration/domain/entities/practice.entity";
-import { PracticeRepository as Repository } from "src/modules/registration/domain/ports/practice.repository";
+import { Practice as DomainPractice } from "~/modules/registration/domain/entities/practice.entity";
+import { PracticeRepository as Repository } from "~/modules/registration/domain/ports/practice.repository";
 import { Repository as TypeOrmRepository } from "typeorm";
-import { PracticeEntity } from "../entities/practice.entity";
+import { PracticeEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/practice.entity";
 
 @Injectable()
 export class PracticeRepository extends Repository {

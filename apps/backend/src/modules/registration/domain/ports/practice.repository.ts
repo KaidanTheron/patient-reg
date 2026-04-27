@@ -1,4 +1,4 @@
-import { Practice } from "../entities/practice.entity";
+import { Practice } from "~/modules/registration/domain/entities/practice.entity";
 
 export abstract class PracticeRepository {
   abstract create(name: Practice["name"]): Promise<Practice>;

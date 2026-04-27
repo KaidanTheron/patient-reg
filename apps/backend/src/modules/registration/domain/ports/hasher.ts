@@ -1,3 +1,3 @@
 export abstract class Hasher {
-    abstract hash(rawValue: string): Promise<string>;
+  abstract hash(rawValue: string): Promise<string>;
 }

@@ -8,9 +8,12 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
-import { PracticeEntity } from "./practice.entity";
-import { PatientIdentityEntity } from "./patient-identity.entity";
-import { type RegistrationRequestStatusValue, registrationRequestStatusValues } from "../../../../domain/value-objects/registration-status";
+import { PracticeEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/practice.entity";
+import { PatientIdentityEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
+import {
+  type RegistrationRequestStatusValue,
+  registrationRequestStatusValues,
+} from "~/modules/registration/domain/value-objects/registration-status";
 
 @Entity({ name: "registration_requests" })
 @Index(["patientIdentity", "practice"], { unique: true })

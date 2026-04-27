@@ -1,5 +1,5 @@
-import { HashedRsaId } from "../value-objects/hashed-rsaid";
-import { Practice } from "./practice.entity";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { Practice } from "~/modules/registration/domain/entities/practice.entity";
 
 /**
  * Proposed patient–practice membership before persistence. Created when a
@@ -10,10 +10,7 @@ export class DraftPatientPractice {
   public readonly patientIdentityId: HashedRsaId;
   public readonly practiceId: Practice["id"];
 
-  constructor(
-    patientIdentityId: HashedRsaId,
-    practiceId: Practice["id"],
-  ) {
+  constructor(patientIdentityId: HashedRsaId, practiceId: Practice["id"]) {
     this.patientIdentityId = patientIdentityId;
     this.practiceId = practiceId;
   }

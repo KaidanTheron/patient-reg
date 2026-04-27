@@ -2,38 +2,47 @@ import { ConfigService } from "@nestjs/config";
 import z from "zod";
 import { config } from "dotenv";
 
-config()
+config();
 
 enum DBType {
-    postgres = "postgres",
+  postgres = "postgres",
 }
 
 const envSchema = z.object({
-    DB_PASSWORD: z.string(),
-    DB_USERNAME: z.string(),
-    DB_PORT: z.coerce.number().default(5432),
-    DB_HOST: z.string().default("localhost"),
-    DB_TYPE: z.enum(DBType).default(DBType.postgres),
-    DB_MAX_CONNECTIONS: z.coerce.number().optional(),
-    SECRET: z.string().default("supersecretsecretkey"),
-    /** Base URL of the patient-facing app (Vite / React Router); no trailing slash. */
-    PATIENT_APP_URL: z.string().default("http://localhost:5173"),
-})
+  DB_PASSWORD: z.string(),
+  DB_USERNAME: z.string(),
+  DB_PORT: z.coerce.number().default(5432),
+  DB_HOST: z.string().default("localhost"),
+  DB_TYPE: z.enum(DBType).default(DBType.postgres),
+  DB_MAX_CONNECTIONS: z.coerce.number().optional(),
+  SECRET: z.string().default("supersecretsecretkey"),
+  /** Base URL of the patient-facing app (Vite / React Router); no trailing slash. */
+  PATIENT_APP_URL: z.string().default("http://localhost:5173"),
+});
 
 const getEnv = () => {
-    const configService = new ConfigService();
+  const configService = new ConfigService();
 
-    const result = envSchema.safeParse(envSchema.keyof().options.reduce((prev, curr) => ({
+  const fromConfig = envSchema
+    .keyof()
+    .options.reduce((prev: Record<string, unknown>, curr) => {
+      const key = String(curr);
+      const value: unknown = configService.get(key);
+      return {
         ...prev,
-        [curr]: configService.get(curr)
-    }), {}));
+        [key]: value,
+      };
+    }, {});
+  const result = envSchema.safeParse(fromConfig);
 
-    if (!result.success) {
-        const flattenedError = z.flattenError(result.error);
-        throw new Error(JSON.stringify(flattenedError.fieldErrors, null, 2), { cause: "Invalid Environment Variables" });
-    }
+  if (!result.success) {
+    const flattenedError = z.flattenError(result.error);
+    throw new Error(JSON.stringify(flattenedError.fieldErrors, null, 2), {
+      cause: "Invalid Environment Variables",
+    });
+  }
 
-    return result.data;
-}
+  return result.data;
+};
 
 export const env = getEnv();

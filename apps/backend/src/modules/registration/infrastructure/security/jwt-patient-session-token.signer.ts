@@ -1,11 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { sign, verify, type Secret } from "jsonwebtoken";
-import { env } from "src/config/env";
+import { env } from "~/config/env";
 import {
   type PatientSessionTokenPayload,
   PATIENT_SESSION_TOKEN_TYPE,
   PatientSessionTokenSigner,
-} from "../../domain/ports/patient-session-token.signer";
+} from "~/modules/registration/domain/ports/patient-session-token.signer";
 
 type JwtBody = {
   registrationLinkId: string;
@@ -16,7 +16,7 @@ type JwtBody = {
 
 @Injectable()
 export class JwtPatientSessionTokenSigner extends PatientSessionTokenSigner {
-  private readonly secret: Secret = env.SECRET as Secret;
+  private readonly secret: Secret = env.SECRET;
 
   sign(params: { registrationLinkId: string; expiresAt: Date }): string {
     const expiresInSeconds = Math.max(

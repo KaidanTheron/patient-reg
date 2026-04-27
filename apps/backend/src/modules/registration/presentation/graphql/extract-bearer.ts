@@ -2,7 +2,9 @@
  * Returns the raw bearer token, or `null` if the header is missing or not
  * `Bearer <token>`.
  */
-export function extractBearerToken(authorizationHeader?: string): string | null {
+export function extractBearerToken(
+  authorizationHeader?: string,
+): string | null {
   if (!authorizationHeader) {
     return null;
   }

@@ -1,8 +1,8 @@
 import { createParamDecorator, type ExecutionContext } from "@nestjs/common";
 import { GqlExecutionContext } from "@nestjs/graphql";
 import type { Request } from "express";
-import type { VerifiedPracticeSession } from "../../application/support/verified-practice-session";
-import type { VerifiedPatientSession } from "../../application/support/protected-patient-session";
+import type { VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
+import type { VerifiedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
 
 /** GraphQL `req` may carry a patient and/or a practice context (on different operations). */
 export type RegistrationGraphqlRequest = Request & {

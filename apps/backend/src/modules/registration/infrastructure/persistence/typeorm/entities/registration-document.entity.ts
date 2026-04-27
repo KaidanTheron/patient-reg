@@ -8,8 +8,8 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
-import { PatientIdentityEntity } from "./patient-identity.entity";
-import { RegistrationRequestEntity } from "./registration-request.entity";
+import { PatientIdentityEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
+import { RegistrationRequestEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/registration-request.entity";
 
 @Entity({ name: "registration_documents" })
 export class RegistrationDocumentEntity {

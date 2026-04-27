@@ -1,25 +1,29 @@
 import { Injectable } from "@nestjs/common";
 import { sign, verify, type Secret } from "jsonwebtoken";
-import { env } from "src/config/env";
+import { env } from "~/config/env";
 import {
   RegistrationLinkTokenPayload,
   RegistrationLinkTokenSigner,
-} from "../../domain/ports/registration-link-token.signer";
+} from "~/modules/registration/domain/ports/registration-link-token.signer";
 
 type JwtBody = { registrationLinkId: string; exp: number; iat: number };
 
 @Injectable()
 export class JwtRegistrationLinkTokenSigner extends RegistrationLinkTokenSigner {
-  private readonly secret: Secret = env.SECRET as Secret;
+  private readonly secret: Secret = env.SECRET;
 
   sign(params: { registrationLinkId: string; expiresAt: Date }): string {
     const expiresInSeconds = Math.max(
       1,
       Math.floor((params.expiresAt.getTime() - Date.now()) / 1000),
     );
-    return sign({ registrationLinkId: params.registrationLinkId }, this.secret, {
-      expiresIn: expiresInSeconds,
-    });
+    return sign(
+      { registrationLinkId: params.registrationLinkId },
+      this.secret,
+      {
+        expiresIn: expiresInSeconds,
+      },
+    );
   }
 
   verify(token: string): RegistrationLinkTokenPayload {

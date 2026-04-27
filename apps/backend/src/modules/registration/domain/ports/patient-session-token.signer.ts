@@ -7,7 +7,10 @@ export type PatientSessionTokenPayload = {
 };
 
 export abstract class PatientSessionTokenSigner {
-  abstract sign(params: { registrationLinkId: string; expiresAt: Date }): string;
+  abstract sign(params: {
+    registrationLinkId: string;
+    expiresAt: Date;
+  }): string;
 
   abstract verify(token: string): PatientSessionTokenPayload;
 }

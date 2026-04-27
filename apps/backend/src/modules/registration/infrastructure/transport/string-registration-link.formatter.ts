@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { env } from "src/config/env";
-import { RegistrationLinkFormatter } from "../../domain/ports/registration-link.formatter";
+import { env } from "~/config/env";
+import { RegistrationLinkFormatter } from "~/modules/registration/domain/ports/registration-link.formatter";
 
 @Injectable()
 export class StringRegistrationLinkFormatter extends RegistrationLinkFormatter {

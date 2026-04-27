@@ -1,15 +1,15 @@
-import { HashedRsaId } from "../value-objects/hashed-rsaid";
-import { RegistrationLinkStatus } from "../value-objects/registration-link-status";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { RegistrationLinkStatus } from "~/modules/registration/domain/value-objects/registration-link-status";
 
 export class RegistrationLinkPolicy {
   static canUse(params: {
     status: RegistrationLinkStatus;
     expiresAt: Date;
     now?: Date;
-    current: HashedRsaId,
-    target: HashedRsaId,
-    attempts: number,
-    maxAttempts: number,
+    current: HashedRsaId;
+    target: HashedRsaId;
+    attempts: number;
+    maxAttempts: number;
   }): boolean {
     const now = params.now ?? new Date();
 

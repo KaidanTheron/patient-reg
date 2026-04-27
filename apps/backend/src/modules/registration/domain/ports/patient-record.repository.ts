@@ -1,4 +1,8 @@
-import { DraftPatientRecord, PatientRecord, UpdatePatientRecord } from "../entities/patient-record.entity";
+import {
+  DraftPatientRecord,
+  PatientRecord,
+  UpdatePatientRecord,
+} from "~/modules/registration/domain/entities/patient-record.entity";
 
 export abstract class PatientRecordRepository {
   abstract findByPatientIdentity(

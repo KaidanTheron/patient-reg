@@ -1,4 +1,4 @@
-import { Practice } from "../../domain/entities/practice.entity";
+import { Practice } from "~/modules/registration/domain/entities/practice.entity";
 
 /**
  * For staff-only calls protected by `PracticeSessionGuard` where

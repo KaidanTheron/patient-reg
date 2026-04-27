@@ -1,58 +1,58 @@
 import { ForbiddenException } from "@nestjs/common";
-import { Practice } from "../../domain/entities/practice.entity";
+import { Practice } from "~/modules/registration/domain/entities/practice.entity";
 import {
   DraftRegistrationDocument,
   RegistrationDocument,
   UpdateRegistrationDocument,
-} from "../../domain/entities/registration-document.entity";
+} from "~/modules/registration/domain/entities/registration-document.entity";
 import {
   DraftPatientPractice,
   PatientPractice,
-} from "../../domain/entities/patient-practice.entity";
+} from "~/modules/registration/domain/entities/patient-practice.entity";
 import {
   DraftRegistrationRequest,
   RegistrationRequest,
   UpdateRegistrationRequest,
-} from "../../domain/entities/registration-request.entity";
+} from "~/modules/registration/domain/entities/registration-request.entity";
 import {
   DraftRegistrationLink,
   RegistrationLink,
   UpdateRegistrationLink,
-} from "../../domain/entities/registration-link.entity";
-import { Encrypter } from "../../domain/ports/encrypter";
-import { Hasher } from "../../domain/ports/hasher";
-import { Notifier } from "../../domain/ports/notifier";
-import { PatientIdentityRepository } from "../../domain/ports/patient-identity.repository";
-import { PatientRecordRepository } from "../../domain/ports/patient-record.repository";
-import { PracticeRepository } from "../../domain/ports/practice.repository";
-import { PatientPracticeRepository } from "../../domain/ports/patient-practice.repository";
-import { RegistrationLinkFormatter } from "../../domain/ports/registration-link.formatter";
+} from "~/modules/registration/domain/entities/registration-link.entity";
+import { Encrypter } from "~/modules/registration/domain/ports/encrypter";
+import { Hasher } from "~/modules/registration/domain/ports/hasher";
+import { Notifier } from "~/modules/registration/domain/ports/notifier";
+import { PatientIdentityRepository } from "~/modules/registration/domain/ports/patient-identity.repository";
+import { PatientRecordRepository } from "~/modules/registration/domain/ports/patient-record.repository";
+import { PracticeRepository } from "~/modules/registration/domain/ports/practice.repository";
+import { PatientPracticeRepository } from "~/modules/registration/domain/ports/patient-practice.repository";
+import { RegistrationLinkFormatter } from "~/modules/registration/domain/ports/registration-link.formatter";
 import {
   RegistrationLinkTokenPayload,
   RegistrationLinkTokenSigner,
-} from "../../domain/ports/registration-link-token.signer";
+} from "~/modules/registration/domain/ports/registration-link-token.signer";
 import {
   type PatientSessionTokenPayload,
   PatientSessionTokenSigner,
   PATIENT_SESSION_TOKEN_TYPE,
-} from "../../domain/ports/patient-session-token.signer";
-import { MAX_ATTEMPTS } from "../../domain/constants/registration-link.constants";
-import { RegistrationLinkRepository } from "../../domain/ports/registration-link.repository";
-import { RegistrationRequestRepository } from "../../domain/ports/registration-request.repository";
-import { RegistrationDocumentRepository } from "../../domain/ports/registration-document.repository";
-import { PatientIdentity } from "../../domain/entities/patient-identity.entity";
+} from "~/modules/registration/domain/ports/patient-session-token.signer";
+import { MAX_ATTEMPTS } from "~/modules/registration/domain/constants/registration-link.constants";
+import { RegistrationLinkRepository } from "~/modules/registration/domain/ports/registration-link.repository";
+import { RegistrationRequestRepository } from "~/modules/registration/domain/ports/registration-request.repository";
+import { RegistrationDocumentRepository } from "~/modules/registration/domain/ports/registration-document.repository";
+import { PatientIdentity } from "~/modules/registration/domain/entities/patient-identity.entity";
 import {
   DraftPatientRecord,
   PatientRecord,
   UpdatePatientRecord,
-} from "../../domain/entities/patient-record.entity";
-import { EncryptedValue } from "../../domain/value-objects/encrypted-value";
-import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
-import { RegistrationLinkStatus } from "../../domain/value-objects/registration-link-status";
-import { RegistrationStatus } from "../../domain/value-objects/registration-status";
-import { ProtectedPatientSession } from "../support/protected-patient-session";
-import { type VerifiedPracticeSession } from "../support/verified-practice-session";
-import { RegistrationService } from "./registration";
+} from "~/modules/registration/domain/entities/patient-record.entity";
+import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { RegistrationLinkStatus } from "~/modules/registration/domain/value-objects/registration-link-status";
+import { RegistrationStatus } from "~/modules/registration/domain/value-objects/registration-status";
+import { ProtectedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
+import { type VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
+import { RegistrationService } from "~/modules/registration/application/slices/registration";
 class InMemoryRegistrationRequestRepository extends RegistrationRequestRepository {
   readonly requests = new Map<string, RegistrationRequest>();
   readonly updates: Array<{
@@ -269,9 +269,7 @@ class InMemoryPatientRecordRepository extends PatientRecordRepository {
       update.email ?? existing.email,
       update.phoneNumber ?? existing.phoneNumber,
       update.residentialAddress ?? existing.residentialAddress,
-      update.fullName !== undefined
-        ? update.fullName
-        : existing.fullName,
+      update.fullName !== undefined ? update.fullName : existing.fullName,
       new Date(1),
     );
     this.byIdentity.set(k, next);
@@ -634,7 +632,9 @@ describe("RegistrationService", () => {
     expect(link.practiceId).toBe("practice-1");
 
     const rec = await patientRecords.findByPatientIdentity(patientIdentityId);
-    await expect(rec?.email?.decrypt(encrypter)).resolves.toBe("doc@example.com");
+    await expect(rec?.email?.decrypt(encrypter)).resolves.toBe(
+      "doc@example.com",
+    );
     await expect(rec?.phoneNumber?.decrypt(encrypter)).resolves.toBe(
       "0821111111",
     );
@@ -812,9 +812,8 @@ describe("RegistrationService", () => {
 
   it("findPatientRegRequestById: returns one request with practice name", async () => {
     placeRegistrationLink("lnk-single");
-    const patientSession = await protectedPatientSession.verify(
-      "sess:lnk-single",
-    );
+    const patientSession =
+      await protectedPatientSession.verify("sess:lnk-single");
     const patient = HashedRsaId.fromPersisted(hashedRsaId);
     const req = new RegistrationRequest(
       "req-single-1",
@@ -838,9 +837,8 @@ describe("RegistrationService", () => {
 
   it("findPatientRegRequestById: throws when request is missing", async () => {
     placeRegistrationLink("lnk-miss");
-    const patientSession = await protectedPatientSession.verify(
-      "sess:lnk-miss",
-    );
+    const patientSession =
+      await protectedPatientSession.verify("sess:lnk-miss");
     await expect(
       service.findPatientRegRequestById(patientSession, "no-such-id"),
     ).rejects.toThrow("Registration request not found");
@@ -849,9 +847,8 @@ describe("RegistrationService", () => {
   it("findPatientRegRequestById: throws when session does not match request patient", async () => {
     const otherPatient = HashedRsaId.fromPersisted("hashed:other-id");
     placeRegistrationLink("lnk-mismatch", { patient: otherPatient });
-    const patientSession = await protectedPatientSession.verify(
-      "sess:lnk-mismatch",
-    );
+    const patientSession =
+      await protectedPatientSession.verify("sess:lnk-mismatch");
     const req = new RegistrationRequest(
       "req-mismatch-1",
       HashedRsaId.fromPersisted(hashedRsaId),
@@ -874,9 +871,8 @@ describe("RegistrationService", () => {
     if (!verifyResult.success) {
       throw new Error("expected verify success");
     }
-    const patientSession = await protectedPatientSession.verify(
-      "sess:prof-link",
-    );
+    const patientSession =
+      await protectedPatientSession.verify("sess:prof-link");
     const details = await service.getPatientDetailsForSession(patientSession);
     expect(details).toEqual({
       email: "patient@example.com",
@@ -926,9 +922,8 @@ describe("RegistrationService", () => {
 
   it("submits a registration document and sets status to AWAITING_REVIEW", async () => {
     placeRegistrationLink("doc-submit-1");
-    const patientSession = await protectedPatientSession.verify(
-      "sess:doc-submit-1",
-    );
+    const patientSession =
+      await protectedPatientSession.verify("sess:doc-submit-1");
     const patient = HashedRsaId.fromPersisted(hashedRsaId);
     const req = new RegistrationRequest(
       "req-doc-1",
@@ -968,9 +963,8 @@ describe("RegistrationService", () => {
 
   it("rejects submission when the registration request is missing", async () => {
     placeRegistrationLink("doc-orphan");
-    const patientSession = await protectedPatientSession.verify(
-      "sess:doc-orphan",
-    );
+    const patientSession =
+      await protectedPatientSession.verify("sess:doc-orphan");
     await expect(
       service.submitRegistrationDocument({
         patientSession,
@@ -985,9 +979,8 @@ describe("RegistrationService", () => {
 
   it("updates the registration document when resubmitting after rejection", async () => {
     placeRegistrationLink("doc-resubmit");
-    const resubmitSession = await protectedPatientSession.verify(
-      "sess:doc-resubmit",
-    );
+    const resubmitSession =
+      await protectedPatientSession.verify("sess:doc-resubmit");
     const patient = HashedRsaId.fromPersisted(hashedRsaId);
     const req = new RegistrationRequest(
       "req-doc-3",
@@ -1029,7 +1022,8 @@ describe("RegistrationService", () => {
 
   it("does not allow submission from AWAITING_REVIEW (already submitted)", async () => {
     placeRegistrationLink("doc-state");
-    const patientSession = await protectedPatientSession.verify("sess:doc-state");
+    const patientSession =
+      await protectedPatientSession.verify("sess:doc-state");
     const patient = HashedRsaId.fromPersisted(hashedRsaId);
     const req = new RegistrationRequest(
       "req-doc-4",

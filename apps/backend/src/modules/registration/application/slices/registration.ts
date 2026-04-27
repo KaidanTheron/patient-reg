@@ -1,49 +1,46 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
-import { Practice } from "../../domain/entities/practice.entity";
-import { PatientIdentityRepository } from "../../domain/ports/patient-identity.repository";
-import { PatientRecordRepository } from "../../domain/ports/patient-record.repository";
-import { PracticeRepository } from "../../domain/ports/practice.repository";
-import { RegistrationRequestRepository } from "../../domain/ports/registration-request.repository";
-import { Notifier } from "../../domain/ports/notifier";
-import { RegistrationLinkTokenSigner } from "../../domain/ports/registration-link-token.signer";
-import { RegistrationLinkFormatter } from "../../domain/ports/registration-link.formatter";
+import { Practice } from "~/modules/registration/domain/entities/practice.entity";
+import { PatientIdentityRepository } from "~/modules/registration/domain/ports/patient-identity.repository";
+import { PatientRecordRepository } from "~/modules/registration/domain/ports/patient-record.repository";
+import { PracticeRepository } from "~/modules/registration/domain/ports/practice.repository";
+import { RegistrationRequestRepository } from "~/modules/registration/domain/ports/registration-request.repository";
+import { Notifier } from "~/modules/registration/domain/ports/notifier";
+import { RegistrationLinkTokenSigner } from "~/modules/registration/domain/ports/registration-link-token.signer";
+import { RegistrationLinkFormatter } from "~/modules/registration/domain/ports/registration-link.formatter";
 import {
   DraftRegistrationRequest,
   RegistrationRequest,
   UpdateRegistrationRequest,
-} from "../../domain/entities/registration-request.entity";
+} from "~/modules/registration/domain/entities/registration-request.entity";
 import {
   DraftRegistrationLink,
   UpdateRegistrationLink,
-} from "../../domain/entities/registration-link.entity";
-import { RegistrationLinkStatus } from "../../domain/value-objects/registration-link-status";
-import { PatientSessionTokenSigner } from "../../domain/ports/patient-session-token.signer";
+} from "~/modules/registration/domain/entities/registration-link.entity";
+import { RegistrationLinkStatus } from "~/modules/registration/domain/value-objects/registration-link-status";
+import { PatientSessionTokenSigner } from "~/modules/registration/domain/ports/patient-session-token.signer";
 import {
   MAX_ATTEMPTS,
   PATIENT_SESSION_TTL_MS,
-} from "../../domain/constants/registration-link.constants";
-import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
-import { RsaIdNumber } from "../../domain/value-objects/rsaid";
-import { Hasher } from "../../domain/ports/hasher";
-import { RegistrationLinkRepository } from "../../domain/ports/registration-link.repository";
-import { Encrypter } from "../../domain/ports/encrypter";
-import { DraftPatientPractice } from "../../domain/entities/patient-practice.entity";
-import { PatientPracticeRepository } from "../../domain/ports/patient-practice.repository";
-import { RegistrationDocumentRepository } from "../../domain/ports/registration-document.repository";
-import { EncryptedValue } from "../../domain/value-objects/encrypted-value";
+} from "~/modules/registration/domain/constants/registration-link.constants";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { RsaIdNumber } from "~/modules/registration/domain/value-objects/rsaid";
+import { Hasher } from "~/modules/registration/domain/ports/hasher";
+import { RegistrationLinkRepository } from "~/modules/registration/domain/ports/registration-link.repository";
+import { Encrypter } from "~/modules/registration/domain/ports/encrypter";
+import { DraftPatientPractice } from "~/modules/registration/domain/entities/patient-practice.entity";
+import { PatientPracticeRepository } from "~/modules/registration/domain/ports/patient-practice.repository";
+import { RegistrationDocumentRepository } from "~/modules/registration/domain/ports/registration-document.repository";
+import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
 import {
   DraftRegistrationDocument,
   UpdateRegistrationDocument,
-} from "../../domain/entities/registration-document.entity";
+} from "~/modules/registration/domain/entities/registration-document.entity";
 import {
   DraftPatientRecord,
   UpdatePatientRecord,
-} from "../../domain/entities/patient-record.entity";
-import {
-  ProtectedPatientSession,
-  type VerifiedPatientSession,
-} from "../support/protected-patient-session";
-import { type VerifiedPracticeSession } from "../support/verified-practice-session";
+} from "~/modules/registration/domain/entities/patient-record.entity";
+import { type VerifiedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
+import { type VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -195,9 +192,8 @@ export class RegistrationService {
       ),
     );
 
-    const document = await this.registrationDocuments.findByRegistrationRequestId(
-      request.id,
-    );
+    const document =
+      await this.registrationDocuments.findByRegistrationRequestId(request.id);
     if (!document) {
       throw new Error("Registration has no submitted document to approve");
     }
@@ -342,7 +338,7 @@ export class RegistrationService {
   }
 
   // finds patient-practice links for a practice
-  async findLinkedPatients(practiceId: Practice["id"]) {}
+  async findLinkedPatients(_practiceId: Practice["id"]) {}
 
   /**
    * Staff-only. Callers must pass a {@link VerifiedPracticeSession} from
@@ -396,8 +392,9 @@ export class RegistrationService {
     patientSession: VerifiedPatientSession,
     registrationRequestId: string,
   ): Promise<RegistrationRequestListItem> {
-    const request =
-      await this.registrationRequests.findById(registrationRequestId);
+    const request = await this.registrationRequests.findById(
+      registrationRequestId,
+    );
     if (!request) {
       throw new Error("Registration request not found");
     }
@@ -405,7 +402,10 @@ export class RegistrationService {
       throw new Error("Session is not valid for this registration request");
     }
     const practiceName = await this.resolvePracticeName(request.practiceId);
-    return this.toRegistrationRequestListItemWithIdentity(request, practiceName);
+    return this.toRegistrationRequestListItemWithIdentity(
+      request,
+      practiceName,
+    );
   }
 
   /**
@@ -636,15 +636,15 @@ export class RegistrationService {
     }
 
     const [email, phone, residentialAddress] = await Promise.all([
-        record.email?.decrypt(this.encrypter),
-        record.phoneNumber?.decrypt(this.encrypter),
-        record.residentialAddress?.decrypt(this.encrypter),
-    ])
+      record.email?.decrypt(this.encrypter),
+      record.phoneNumber?.decrypt(this.encrypter),
+      record.residentialAddress?.decrypt(this.encrypter),
+    ]);
 
     return {
-        email,
-        phone,
-        residentialAddress,
+      email,
+      phone,
+      residentialAddress,
     };
   }
 

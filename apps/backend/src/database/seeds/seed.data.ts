@@ -1,21 +1,21 @@
-import { PatientIdentityEntity } from "src/modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
+import { PatientIdentityEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
 
 export const identities: readonly Omit<PatientIdentityEntity, "id">[] = [
-    {
-        email: "notreal@notreal.com",
-        identity: "0501018431087",
-        phone: "+27825550199",
-        fullName: "Johan de Wet",
-    },
-    {
-        email: "old.email@example.com",
-        identity: "9001015009086",
-        phone: "+27821234567",
-        fullName: "Emily Jacobs",
-    }
+  {
+    email: "notreal@notreal.com",
+    identity: "0501018431087",
+    phone: "+27825550199",
+    fullName: "Johan de Wet",
+  },
+  {
+    email: "old.email@example.com",
+    identity: "9001015009086",
+    phone: "+27821234567",
+    fullName: "Emily Jacobs",
+  },
 ];
 
 export const practiceNames: readonly string[] = [
-    "Winelands Family Practice",
-    "Intercare Panorama"
-]
+  "Winelands Family Practice",
+  "Intercare Panorama",
+];

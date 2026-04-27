@@ -1,9 +1,16 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from "typeorm";
 import {
   type RegistrationLinkStatusValue,
   registrationLinkStatusValues,
-} from "../../../../domain/value-objects/registration-link-status";
-import { PatientIdentityEntity } from "./patient-identity.entity";
+} from "~/modules/registration/domain/value-objects/registration-link-status";
+import { PatientIdentityEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
 
 @Entity({ name: "registration_links" })
 @Index(["patientIdentity", "status"])

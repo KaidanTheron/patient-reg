@@ -7,7 +7,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
-import { PatientIdentityEntity } from "./patient-identity.entity";
+import { PatientIdentityEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
 
 @Entity({ name: "patient_records" })
 export class PatientRecordEntity {

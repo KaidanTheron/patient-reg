@@ -1,5 +1,5 @@
 import { NestFactory } from "@nestjs/core";
-import { AppModule } from "./app.module";
+import { AppModule } from "~/app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -7,4 +7,4 @@ async function bootstrap() {
 
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
-bootstrap();
+void bootstrap();

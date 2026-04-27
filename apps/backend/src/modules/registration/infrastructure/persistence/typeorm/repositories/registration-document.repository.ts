@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { RegistrationDocumentRepository as Port } from "../../../../domain/ports/registration-document.repository";
+import { RegistrationDocumentRepository as Port } from "~/modules/registration/domain/ports/registration-document.repository";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository as TypeOrmRepository } from "typeorm";
 import type { FindOptionsRelations } from "typeorm";
@@ -7,17 +7,18 @@ import {
   DraftRegistrationDocument,
   RegistrationDocument,
   UpdateRegistrationDocument,
-} from "../../../../domain/entities/registration-document.entity";
-import { HashedRsaId } from "../../../../domain/value-objects/hashed-rsaid";
-import { EncryptedValue } from "../../../../domain/value-objects/encrypted-value";
-import { RegistrationDocumentEntity } from "../entities/registration-document.entity";
+} from "~/modules/registration/domain/entities/registration-document.entity";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
+import { RegistrationDocumentEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/registration-document.entity";
 
 @Injectable()
 export class TypeOrmRegistrationDocumentRepository extends Port {
-  private static readonly relations: FindOptionsRelations<RegistrationDocumentEntity> = {
-    registrationRequest: true,
-    patientIdentity: true,
-  };
+  private static readonly relations: FindOptionsRelations<RegistrationDocumentEntity> =
+    {
+      registrationRequest: true,
+      patientIdentity: true,
+    };
 
   constructor(
     @InjectRepository(RegistrationDocumentEntity)
@@ -81,9 +82,7 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
     return this.toDomain(entity);
   }
 
-  private toDomain(
-    entity: RegistrationDocumentEntity,
-  ): RegistrationDocument {
+  private toDomain(entity: RegistrationDocumentEntity): RegistrationDocument {
     if (!entity.patientIdentity || !entity.registrationRequest) {
       throw new Error("Registration document is missing relations");
     }

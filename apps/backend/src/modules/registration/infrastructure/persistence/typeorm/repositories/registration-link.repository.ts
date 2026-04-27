@@ -2,24 +2,22 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository as TypeOrmRepository } from "typeorm";
 import type { FindOptionsRelations } from "typeorm";
-import { RegistrationLinkRepository as Repository } from "../../../../domain/ports/registration-link.repository";
+import { RegistrationLinkRepository as Repository } from "~/modules/registration/domain/ports/registration-link.repository";
 import {
   DraftRegistrationLink,
   RegistrationLink,
   UpdateRegistrationLink,
-} from "../../../../domain/entities/registration-link.entity";
-import { HashedRsaId } from "../../../../domain/value-objects/hashed-rsaid";
-import {
-  RegistrationLinkStatus,
-  type RegistrationLinkStatusValue,
-} from "../../../../domain/value-objects/registration-link-status";
-import { RegistrationLinkEntity } from "../entities/registration-link.entity";
+} from "~/modules/registration/domain/entities/registration-link.entity";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { RegistrationLinkStatus } from "~/modules/registration/domain/value-objects/registration-link-status";
+import { RegistrationLinkEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/registration-link.entity";
 
 @Injectable()
 export class TypeOrmRegistrationLinkRepository extends Repository {
-  private static readonly withPatientIdentity: FindOptionsRelations<RegistrationLinkEntity> = {
-    patientIdentity: true,
-  };
+  private static readonly withPatientIdentity: FindOptionsRelations<RegistrationLinkEntity> =
+    {
+      patientIdentity: true,
+    };
 
   constructor(
     @InjectRepository(RegistrationLinkEntity)
@@ -87,9 +85,7 @@ export class TypeOrmRegistrationLinkRepository extends Repository {
     await this.repo.update(
       { id },
       {
-        status: link
-          .getStatus()
-          .toString() as RegistrationLinkStatusValue,
+        status: link.getStatus().toString(),
         attempts: link.getAttempts(),
       },
     );

@@ -1,11 +1,14 @@
 import { ForbiddenException, UseGuards } from "@nestjs/common";
 import { Args, Mutation, Query, Resolver } from "@nestjs/graphql";
-import { RegistrationService } from "../../application/slices/registration";
-import type { VerifiedPatientSession } from "../../application/support/protected-patient-session";
-import type { VerifiedPracticeSession } from "../../application/support/verified-practice-session";
-import { PatientSession, PracticeSession } from "./session.context";
-import { PatientSessionGuard } from "./patient-session.guard";
-import { PracticeSessionGuard } from "./practice-session.guard";
+import { RegistrationService } from "~/modules/registration/application/slices/registration";
+import type { VerifiedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
+import type { VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
+import {
+  PatientSession,
+  PracticeSession,
+} from "~/modules/registration/presentation/graphql/session.context";
+import { PatientSessionGuard } from "~/modules/registration/presentation/graphql/patient-session.guard";
+import { PracticeSessionGuard } from "~/modules/registration/presentation/graphql/practice-session.guard";
 import {
   ApproveRegistrationInput,
   CreatePracticeInput,
@@ -16,7 +19,7 @@ import {
   SubmitRegistrationDocumentInput,
   VerifyRegistrationInput,
   VerifyRegistrationPayload,
-} from "./registration.models";
+} from "~/modules/registration/presentation/graphql/registration.models";
 
 @Resolver()
 export class RegistrationResolver {
@@ -128,9 +131,8 @@ export class RegistrationResolver {
   async myPatientProfile(
     @PatientSession() patientSession: VerifiedPatientSession,
   ): Promise<PatientProfilePayload> {
-    const d = await this.registration.getPatientDetailsForSession(
-      patientSession,
-    );
+    const d =
+      await this.registration.getPatientDetailsForSession(patientSession);
     return {
       email: d.email ?? null,
       phone: d.phone ?? null,

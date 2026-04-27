@@ -2,7 +2,7 @@ import {
   DraftRegistrationDocument,
   RegistrationDocument,
   UpdateRegistrationDocument,
-} from "../entities/registration-document.entity";
+} from "~/modules/registration/domain/entities/registration-document.entity";
 
 export abstract class RegistrationDocumentRepository {
   abstract create(

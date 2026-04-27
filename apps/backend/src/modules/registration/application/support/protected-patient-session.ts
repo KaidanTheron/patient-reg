@@ -1,8 +1,8 @@
 import { Injectable } from "@nestjs/common";
-import { RegistrationLink } from "../../domain/entities/registration-link.entity";
-import { PatientSessionTokenSigner } from "../../domain/ports/patient-session-token.signer";
-import { RegistrationLinkRepository } from "../../domain/ports/registration-link.repository";
-import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
+import { RegistrationLink } from "~/modules/registration/domain/entities/registration-link.entity";
+import { PatientSessionTokenSigner } from "~/modules/registration/domain/ports/patient-session-token.signer";
+import { RegistrationLinkRepository } from "~/modules/registration/domain/ports/registration-link.repository";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 
 export type VerifiedPatientSession = {
   registrationLinkId: RegistrationLink["id"];

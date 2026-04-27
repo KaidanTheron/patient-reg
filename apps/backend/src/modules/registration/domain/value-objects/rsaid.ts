@@ -1,5 +1,5 @@
 const luhn = (id: string) => {
-  const checksum = Number(id[12])
+  const checksum = Number(id[12]);
   const checkString = id.slice(0, 12);
   let sum = 0;
   let shouldDouble = true;
@@ -18,9 +18,9 @@ const luhn = (id: string) => {
     shouldDouble = !shouldDouble;
   }
 
-  const expected = (10 - (sum % 10)) % 10 
+  const expected = (10 - (sum % 10)) % 10;
   return checksum === expected;
-}
+};
 
 export class RsaIdNumber {
   private constructor(private readonly value: string) {}

@@ -10,7 +10,7 @@ export type RegistrationRequestStatusValue =
 
 export class RegistrationStatus {
   constructor(private readonly value: RegistrationRequestStatusValue) {}
-  
+
   public static awaitingCompletion() {
     return new RegistrationStatus("AWAITING_COMPLETION");
   }

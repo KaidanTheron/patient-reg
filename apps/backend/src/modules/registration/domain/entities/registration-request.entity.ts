@@ -1,7 +1,7 @@
-import { RegistrationStatus } from "../value-objects/registration-status";
-import { RegistrationStatePolicy } from "../policies/registration-state.policy";
-import { HashedRsaId } from "../value-objects/hashed-rsaid";
-import { Practice } from "./practice.entity";
+import { RegistrationStatus } from "~/modules/registration/domain/value-objects/registration-status";
+import { RegistrationStatePolicy } from "~/modules/registration/domain/policies/registration-state.policy";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { Practice } from "~/modules/registration/domain/entities/practice.entity";
 
 export class DraftRegistrationRequest {
   public readonly patientIdentityId: HashedRsaId;
@@ -9,10 +9,7 @@ export class DraftRegistrationRequest {
   public readonly status: RegistrationStatus;
   public readonly rejectionReason?: string;
 
-  constructor(
-    patientIdentityId: HashedRsaId,
-    practiceId: Practice["id"]
-  ) {
+  constructor(patientIdentityId: HashedRsaId, practiceId: Practice["id"]) {
     this.patientIdentityId = patientIdentityId;
     this.practiceId = practiceId;
     this.status = RegistrationStatus.awaitingCompletion();
@@ -28,14 +25,13 @@ export class UpdateRegistrationRequest {
 }
 
 export class RegistrationRequest {
-
   constructor(
     public readonly id: string,
     public readonly patientIdentityId: HashedRsaId,
     public readonly practiceId: Practice["id"],
     private status: RegistrationStatus,
     private rejectionReason?: string,
-  ) {};
+  ) {}
 
   getStatus(): RegistrationStatus {
     return this.status;

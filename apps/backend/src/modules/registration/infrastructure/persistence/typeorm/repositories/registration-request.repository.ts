@@ -1,25 +1,24 @@
 import { Injectable } from "@nestjs/common";
-import { RegistrationRequestRepository as Repository } from "../../../../domain/ports/registration-request.repository";
+import { RegistrationRequestRepository as Repository } from "~/modules/registration/domain/ports/registration-request.repository";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository as TypeOrmRepository } from "typeorm";
 import type { FindOptionsRelations } from "typeorm";
+import { RegistrationRequestEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/registration-request.entity";
 import {
-  RegistrationRequestEntity,
-} from "../entities/registration-request.entity";
-import {
-    DraftRegistrationRequest,
+  DraftRegistrationRequest,
   RegistrationRequest,
   UpdateRegistrationRequest,
-} from "src/modules/registration/domain/entities/registration-request.entity";
-import { RegistrationStatus } from "src/modules/registration/domain/value-objects/registration-status";
-import { HashedRsaId } from "src/modules/registration/domain/value-objects/hashed-rsaid";
+} from "~/modules/registration/domain/entities/registration-request.entity";
+import { RegistrationStatus } from "~/modules/registration/domain/value-objects/registration-status";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 
 @Injectable()
 export class RegistrationRequestRepository extends Repository {
-  private static readonly withPatientAndPractice: FindOptionsRelations<RegistrationRequestEntity> = {
-    patientIdentity: true,
-    practice: true,
-  };
+  private static readonly withPatientAndPractice: FindOptionsRelations<RegistrationRequestEntity> =
+    {
+      patientIdentity: true,
+      practice: true,
+    };
 
   constructor(
     @InjectRepository(RegistrationRequestEntity)
@@ -33,7 +32,7 @@ export class RegistrationRequestRepository extends Repository {
   ): Promise<RegistrationRequest> {
     const saved = await this.repo.save({
       patientIdentity: { identity: request.patientIdentityId.toString() },
-      status: request.status.toString() as RegistrationRequestEntity["status"],
+      status: request.status.toString(),
       practice: { id: request.practiceId },
     });
     const entity = await this.repo.findOne({
@@ -98,7 +97,7 @@ export class RegistrationRequestRepository extends Repository {
   ): Promise<void> {
     const payload: Partial<RegistrationRequestEntity> = {};
     if (request.status !== undefined) {
-      payload.status = request.status.toString() as RegistrationRequestEntity["status"];
+      payload.status = request.status.toString();
     }
     if (request.rejectionReason !== undefined) {
       payload.rejectionReason = request.rejectionReason;
@@ -111,7 +110,9 @@ export class RegistrationRequestRepository extends Repository {
 
   private toDomain(entity: RegistrationRequestEntity): RegistrationRequest {
     if (!entity.patientIdentity) {
-      throw new Error("Registration request is missing patient identity relation");
+      throw new Error(
+        "Registration request is missing patient identity relation",
+      );
     }
     if (!entity.practice) {
       throw new Error("Registration request is missing practice relation");

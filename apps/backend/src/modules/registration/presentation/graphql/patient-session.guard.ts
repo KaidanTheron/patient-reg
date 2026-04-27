@@ -5,9 +5,9 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { GqlExecutionContext } from "@nestjs/graphql";
-import { ProtectedPatientSession } from "../../application/support/protected-patient-session";
-import { extractBearerToken } from "./extract-bearer";
-import type { RegistrationGraphqlContext } from "./session.context";
+import { ProtectedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
+import { extractBearerToken } from "~/modules/registration/presentation/graphql/extract-bearer";
+import type { RegistrationGraphqlContext } from "~/modules/registration/presentation/graphql/session.context";
 
 @Injectable()
 export class PatientSessionGuard implements CanActivate {

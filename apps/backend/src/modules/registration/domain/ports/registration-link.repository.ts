@@ -2,7 +2,7 @@ import {
   DraftRegistrationLink,
   RegistrationLink,
   UpdateRegistrationLink,
-} from "../entities/registration-link.entity";
+} from "~/modules/registration/domain/entities/registration-link.entity";
 
 export abstract class RegistrationLinkRepository {
   abstract create(link: DraftRegistrationLink): Promise<RegistrationLink>;
@@ -15,7 +15,9 @@ export abstract class RegistrationLinkRepository {
     patient: RegistrationLink["patient"],
   ): Promise<RegistrationLink | null>;
 
-  abstract revokeActiveForPatient(patient: RegistrationLink["patient"]): Promise<void>;
+  abstract revokeActiveForPatient(
+    patient: RegistrationLink["patient"],
+  ): Promise<void>;
 
   abstract update(
     id: RegistrationLink["id"],

@@ -1,5 +1,5 @@
-import { HashedRsaId } from "../value-objects/hashed-rsaid";
-import { EncryptedValue } from "../value-objects/encrypted-value";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
 
 /**
  * Baseline fields copied from {@link PatientIdentity} when the patient first

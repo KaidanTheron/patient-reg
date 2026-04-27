@@ -1,6 +1,6 @@
-import { HashedRsaId } from "../value-objects/hashed-rsaid";
-import { EncryptedValue } from "../value-objects/encrypted-value";
-import { RegistrationRequest } from "./registration-request.entity";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
+import { RegistrationRequest } from "~/modules/registration/domain/entities/registration-request.entity";
 
 export class DraftRegistrationDocument {
   constructor(

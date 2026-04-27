@@ -1,16 +1,16 @@
 import { Injectable } from "@nestjs/common";
-import { PatientRecordRepository as Port } from "../../../../domain/ports/patient-record.repository";
+import { PatientRecordRepository as Port } from "~/modules/registration/domain/ports/patient-record.repository";
 import {
   DraftPatientRecord,
   PatientRecord,
   UpdatePatientRecord,
-} from "../../../../domain/entities/patient-record.entity";
-import { HashedRsaId } from "../../../../domain/value-objects/hashed-rsaid";
-import { EncryptedValue } from "../../../../domain/value-objects/encrypted-value";
-import { Encrypter } from "../../../../domain/ports/encrypter";
+} from "~/modules/registration/domain/entities/patient-record.entity";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
+import { Encrypter } from "~/modules/registration/domain/ports/encrypter";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository as TypeOrmRepository } from "typeorm";
-import { PatientRecordEntity } from "../entities/patient-record.entity";
+import { PatientRecordEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/patient-record.entity";
 
 @Injectable()
 export class TypeOrmPatientRecordRepository extends Port {
@@ -33,12 +33,7 @@ export class TypeOrmPatientRecordRepository extends Port {
   }
 
   async ensureFromIdentity(draft: DraftPatientRecord): Promise<PatientRecord> {
-    const {
-      email,
-      identity,
-      phone,
-      fullName,
-    } = {
+    const { email, identity, phone, fullName } = {
       identity: draft.patientIdentityId.toString(),
       email: draft.email?.toPersisted(),
       phone: draft.phoneNumber?.toPersisted(),
@@ -106,10 +101,7 @@ export class TypeOrmPatientRecordRepository extends Port {
     if (!entity) {
       return;
     }
-    const encrypted = await EncryptedValue.create(
-      fullName,
-      this.encrypter,
-    );
+    const encrypted = await EncryptedValue.create(fullName, this.encrypter);
     await this.repo.update(
       { id: entity.id },
       { fullName: encrypted.toPersisted() },
@@ -136,7 +128,9 @@ export class TypeOrmPatientRecordRepository extends Port {
       HashedRsaId.fromPersisted(patientIdentity.identity),
       email ? EncryptedValue.fromPersisted(email) : undefined,
       phoneNumber ? EncryptedValue.fromPersisted(phoneNumber) : undefined,
-      residentialAddress ? EncryptedValue.fromPersisted(residentialAddress): undefined,
+      residentialAddress
+        ? EncryptedValue.fromPersisted(residentialAddress)
+        : undefined,
       fullName ? EncryptedValue.fromPersisted(fullName) : undefined,
       updatedAt,
     );

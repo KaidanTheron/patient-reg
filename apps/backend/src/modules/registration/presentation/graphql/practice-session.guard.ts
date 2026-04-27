@@ -5,9 +5,9 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { GqlExecutionContext } from "@nestjs/graphql";
-import type { VerifiedPracticeSession } from "../../application/support/verified-practice-session";
-import { extractBearerToken } from "./extract-bearer";
-import type { RegistrationGraphqlContext } from "./session.context";
+import type { VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
+import { extractBearerToken } from "~/modules/registration/presentation/graphql/extract-bearer";
+import type { RegistrationGraphqlContext } from "~/modules/registration/presentation/graphql/session.context";
 
 @Injectable()
 export class PracticeSessionGuard implements CanActivate {

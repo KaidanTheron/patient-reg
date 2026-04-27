@@ -2,20 +2,21 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import type { FindOptionsRelations } from "typeorm";
-import { PatientPracticeRepository } from "../../../../domain/ports/patient-practice.repository";
+import { PatientPracticeRepository } from "~/modules/registration/domain/ports/patient-practice.repository";
 import {
   DraftPatientPractice,
   PatientPractice,
-} from "../../../../domain/entities/patient-practice.entity";
-import { HashedRsaId } from "../../../../domain/value-objects/hashed-rsaid";
-import { PatientPracticeEntity } from "../entities/patient-practice.entity";
+} from "~/modules/registration/domain/entities/patient-practice.entity";
+import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import { PatientPracticeEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/patient-practice.entity";
 
 @Injectable()
 export class TypeOrmPatientPracticeRepository extends PatientPracticeRepository {
-  private static readonly withPatientAndPractice: FindOptionsRelations<PatientPracticeEntity> = {
-    patientIdentity: true,
-    practice: true,
-  };
+  private static readonly withPatientAndPractice: FindOptionsRelations<PatientPracticeEntity> =
+    {
+      patientIdentity: true,
+      practice: true,
+    };
 
   constructor(
     @InjectRepository(PatientPracticeEntity)
@@ -53,7 +54,9 @@ export class TypeOrmPatientPracticeRepository extends PatientPracticeRepository 
 
   private static toDomain(entity: PatientPracticeEntity): PatientPractice {
     if (!entity.patientIdentity) {
-      throw new Error("Patient–practice link is missing patient identity relation");
+      throw new Error(
+        "Patient–practice link is missing patient identity relation",
+      );
     }
     if (!entity.practice) {
       throw new Error("Patient–practice link is missing practice relation");

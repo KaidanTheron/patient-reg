@@ -6,8 +6,8 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from "typeorm";
-import { PatientIdentityEntity } from "./patient-identity.entity";
-import { PracticeEntity } from "./practice.entity";
+import { PatientIdentityEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
+import { PracticeEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/practice.entity";
 
 @Entity({ name: "patient_practices" })
 @Index(["patientIdentity", "practice"], { unique: true })
