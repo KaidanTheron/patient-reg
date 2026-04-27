@@ -47,6 +47,7 @@ import {
   UpdatePatientRecord,
 } from "~/modules/registration/domain/entities/patient-record.entity";
 import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
+import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
 import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 import { RegistrationLinkStatus } from "~/modules/registration/domain/value-objects/registration-link-status";
 import { RegistrationStatus } from "~/modules/registration/domain/value-objects/registration-status";
@@ -316,7 +317,7 @@ class InMemoryPatientRecordRepository extends PatientRecordRepository {
       existing.phoneNumber,
       existing.residentialAddress,
       existing.fullName,
-      EncryptedValue.fromPersisted(`t:${dateOfBirth}`),
+      EncryptedValue.fromPersisted(`t:${dateOfBirth}`, IsoDate.fromSerialized),
       existing.updatedAt,
     );
     this.byIdentity.set(k, next);
@@ -634,7 +635,7 @@ describe("RegistrationService", () => {
         EncryptedValue.fromPersisted("t:0821111111"),
         EncryptedValue.fromPersisted("t:1 Test St"),
         EncryptedValue.fromPersisted("t:Document Person"),
-        EncryptedValue.fromPersisted("t:1990-06-15"),
+        EncryptedValue.fromPersisted("t:1990-06-15", IsoDate.fromSerialized),
       ),
     );
 
@@ -672,9 +673,9 @@ describe("RegistrationService", () => {
     await expect(rec?.fullName?.decrypt(encrypter)).resolves.toBe(
       "Document Person",
     );
-    await expect(rec?.dateOfBirth?.decrypt(encrypter)).resolves.toBe(
-      "1990-06-15",
-    );
+    await expect(
+      rec?.dateOfBirth?.decrypt(encrypter).then((d) => d.serialize()),
+    ).resolves.toMatch(/^1990-06-15T/);
   });
 
   it("rejects approval when the request belongs to another practice", async () => {
@@ -694,7 +695,7 @@ describe("RegistrationService", () => {
         EncryptedValue.fromPersisted("t:1"),
         EncryptedValue.fromPersisted("t:x"),
         EncryptedValue.fromPersisted("t:X"),
-        EncryptedValue.fromPersisted("t:2000-01-01"),
+        EncryptedValue.fromPersisted("t:2000-01-01", IsoDate.fromSerialized),
       ),
     );
 
@@ -1036,7 +1037,7 @@ describe("RegistrationService", () => {
         EncryptedValue.fromPersisted("t:1"),
         EncryptedValue.fromPersisted("t:old"),
         EncryptedValue.fromPersisted("t:Old Name"),
-        EncryptedValue.fromPersisted("t:1990-01-01"),
+        EncryptedValue.fromPersisted("t:1990-01-01", IsoDate.fromSerialized),
         new Date(0),
       ),
     );

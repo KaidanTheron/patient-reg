@@ -1,5 +1,6 @@
 import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
+import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
 
 /**
  * Baseline fields copied from {@link PatientIdentity} when the patient first
@@ -12,7 +13,7 @@ export class DraftPatientRecord {
     public readonly email?: EncryptedValue,
     public readonly phoneNumber?: EncryptedValue,
     public readonly fullName?: EncryptedValue,
-    public readonly dateOfBirth?: EncryptedValue,
+    public readonly dateOfBirth?: EncryptedValue<IsoDate>,
   ) {}
 }
 
@@ -25,7 +26,7 @@ export class UpdatePatientRecord {
     public readonly phoneNumber: EncryptedValue | undefined,
     public readonly residentialAddress: EncryptedValue | undefined,
     public readonly fullName: EncryptedValue | undefined,
-    public readonly dateOfBirth: EncryptedValue | undefined,
+    public readonly dateOfBirth: EncryptedValue<IsoDate> | undefined,
   ) {}
 }
 
@@ -41,7 +42,7 @@ export class PatientRecord {
     public readonly phoneNumber: EncryptedValue | undefined,
     public readonly residentialAddress: EncryptedValue | undefined,
     public readonly fullName: EncryptedValue | undefined,
-    public readonly dateOfBirth: EncryptedValue | undefined,
+    public readonly dateOfBirth: EncryptedValue<IsoDate> | undefined,
     public readonly updatedAt: Date,
   ) {}
 }

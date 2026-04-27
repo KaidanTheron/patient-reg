@@ -10,6 +10,7 @@ import {
 } from "~/modules/registration/domain/entities/registration-document.entity";
 import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
+import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
 import { RegistrationDocumentEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/registration-document.entity";
 
 @Injectable()
@@ -99,7 +100,7 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
         ? EncryptedValue.fromPersisted(entity.fullName)
         : undefined,
       entity.dateOfBirth
-        ? EncryptedValue.fromPersisted(entity.dateOfBirth)
+        ? EncryptedValue.fromPersisted(entity.dateOfBirth, IsoDate.fromSerialized)
         : undefined,
       entity.submittedAt,
     );

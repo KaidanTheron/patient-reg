@@ -7,6 +7,7 @@ import {
 } from "~/modules/registration/domain/entities/patient-record.entity";
 import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
+import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
 import { Encrypter } from "~/modules/registration/domain/ports/encrypter";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository as TypeOrmRepository } from "typeorm";
@@ -136,7 +137,9 @@ export class TypeOrmPatientRecordRepository extends Port {
         ? EncryptedValue.fromPersisted(residentialAddress)
         : undefined,
       fullName ? EncryptedValue.fromPersisted(fullName) : undefined,
-      dateOfBirth ? EncryptedValue.fromPersisted(dateOfBirth) : undefined,
+      dateOfBirth
+        ? EncryptedValue.fromPersisted(dateOfBirth, IsoDate.fromSerialized)
+        : undefined,
       updatedAt,
     );
   }

@@ -42,6 +42,7 @@ import {
 import { type VerifiedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
 import { type VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
 import { formatLocalDateAsIsoDate } from "~/common/date";
+import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -460,7 +461,11 @@ export class RegistrationService {
         EncryptedValue.create(phoneNumber, this.encrypter),
         EncryptedValue.create(residentialAddress, this.encrypter),
         EncryptedValue.create(fullNamePlain, this.encrypter),
-        EncryptedValue.create(dateOfBirthPlain, this.encrypter),
+        EncryptedValue.create(
+          IsoDate.fromSerialized(dateOfBirthPlain),
+          this.encrypter,
+          IsoDate.fromSerialized,
+        ),
       ]);
 
     request.submit(patientIdentityId);
@@ -655,7 +660,9 @@ export class RegistrationService {
         record.phoneNumber?.decrypt(this.encrypter),
         record.residentialAddress?.decrypt(this.encrypter),
         record.fullName?.decrypt(this.encrypter),
-        record.dateOfBirth?.decrypt(this.encrypter),
+        record.dateOfBirth
+          ?.decrypt(this.encrypter)
+          .then((d) => d.serialize()),
       ]);
 
     return {
