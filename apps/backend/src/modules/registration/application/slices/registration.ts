@@ -41,6 +41,7 @@ import {
 } from "~/modules/registration/domain/entities/patient-record.entity";
 import { type VerifiedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
 import { type VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
+import { formatLocalDateAsIsoDate } from "~/common/date";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -92,6 +93,8 @@ export type SubmitRegistrationDocumentCommand = {
   email: string;
   phoneNumber: string;
   residentialAddress: string;
+  /** ISO date `YYYY-MM-DD` (e.g. from `dateOfBirthFromRsaId` or manual entry). */
+  dateOfBirth: string;
 };
 
 export type SubmitRegistrationDocumentResult = {
@@ -144,6 +147,8 @@ export type PatientSessionDetails = {
   email?: string;
   phone?: string;
   residentialAddress?: string;
+  fullName?: string;
+  dateOfBirth?: string;
 };
 
 @Injectable()
@@ -228,6 +233,7 @@ export class RegistrationService {
         document.phoneNumber,
         document.residentialAddress,
         document.fullName,
+        document.dateOfBirth,
       ),
     );
 
@@ -435,6 +441,7 @@ export class RegistrationService {
     const email = command.email.trim();
     const phoneNumber = command.phoneNumber.trim();
     const residentialAddress = command.residentialAddress.trim();
+    const dateOfBirthPlain = command.dateOfBirth.trim();
     if (!fullNamePlain) {
       throw new Error("Full name is required");
     }
@@ -443,13 +450,18 @@ export class RegistrationService {
         "Email, phone number, and residential address are required",
       );
     }
+    if (!dateOfBirthPlain) {
+      throw new Error("Date of birth is required");
+    }
 
-    const [encEmail, encPhone, encAddress, encFullName] = await Promise.all([
-      EncryptedValue.create(email, this.encrypter),
-      EncryptedValue.create(phoneNumber, this.encrypter),
-      EncryptedValue.create(residentialAddress, this.encrypter),
-      EncryptedValue.create(fullNamePlain, this.encrypter),
-    ]);
+    const [encEmail, encPhone, encAddress, encFullName, encDob] =
+      await Promise.all([
+        EncryptedValue.create(email, this.encrypter),
+        EncryptedValue.create(phoneNumber, this.encrypter),
+        EncryptedValue.create(residentialAddress, this.encrypter),
+        EncryptedValue.create(fullNamePlain, this.encrypter),
+        EncryptedValue.create(dateOfBirthPlain, this.encrypter),
+      ]);
 
     request.submit(patientIdentityId);
 
@@ -464,6 +476,7 @@ export class RegistrationService {
           encPhone,
           encAddress,
           encFullName,
+          encDob,
           submittedAt,
         ),
       );
@@ -476,6 +489,7 @@ export class RegistrationService {
           encPhone,
           encAddress,
           encFullName,
+          encDob,
         ),
       );
     }
@@ -635,17 +649,32 @@ export class RegistrationService {
       throw new Error("Patient not found");
     }
 
-    const [email, phone, residentialAddress] = await Promise.all([
-      record.email?.decrypt(this.encrypter),
-      record.phoneNumber?.decrypt(this.encrypter),
-      record.residentialAddress?.decrypt(this.encrypter),
-    ]);
+    const [email, phone, residentialAddress, fullName, dateOfBirth] =
+      await Promise.all([
+        record.email?.decrypt(this.encrypter),
+        record.phoneNumber?.decrypt(this.encrypter),
+        record.residentialAddress?.decrypt(this.encrypter),
+        record.fullName?.decrypt(this.encrypter),
+        record.dateOfBirth?.decrypt(this.encrypter),
+      ]);
 
     return {
       email,
       phone,
       residentialAddress,
+      fullName,
+      dateOfBirth,
     };
+  }
+
+  /**
+   * Returns the date of birth implied by a valid RSA ID as a **calendar** date
+   * in `YYYY-MM-DD` (local date components; avoids UTC shift from `toISOString()`).
+   */
+  deriveDateOfBirthFromRsaId(identity: string): string {
+    const rsaId = RsaIdNumber.create(identity);
+    const d = rsaId.deriveDateOfBirth();
+    return formatLocalDateAsIsoDate(d);
   }
 
   private toPracticeResult(practice: Practice): PracticeResult {

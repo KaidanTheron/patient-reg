@@ -12,6 +12,7 @@ export class DraftPatientRecord {
     public readonly email?: EncryptedValue,
     public readonly phoneNumber?: EncryptedValue,
     public readonly fullName?: EncryptedValue,
+    public readonly dateOfBirth?: EncryptedValue,
   ) {}
 }
 
@@ -24,6 +25,7 @@ export class UpdatePatientRecord {
     public readonly phoneNumber: EncryptedValue | undefined,
     public readonly residentialAddress: EncryptedValue | undefined,
     public readonly fullName: EncryptedValue | undefined,
+    public readonly dateOfBirth: EncryptedValue | undefined,
   ) {}
 }
 
@@ -39,6 +41,7 @@ export class PatientRecord {
     public readonly phoneNumber: EncryptedValue | undefined,
     public readonly residentialAddress: EncryptedValue | undefined,
     public readonly fullName: EncryptedValue | undefined,
+    public readonly dateOfBirth: EncryptedValue | undefined,
     public readonly updatedAt: Date,
   ) {}
 }

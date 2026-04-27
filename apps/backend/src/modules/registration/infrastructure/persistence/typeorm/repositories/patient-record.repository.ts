@@ -33,11 +33,12 @@ export class TypeOrmPatientRecordRepository extends Port {
   }
 
   async ensureFromIdentity(draft: DraftPatientRecord): Promise<PatientRecord> {
-    const { email, identity, phone, fullName } = {
+    const { email, identity, phone, fullName, dateOfBirth } = {
       identity: draft.patientIdentityId.toString(),
       email: draft.email?.toPersisted(),
       phone: draft.phoneNumber?.toPersisted(),
       fullName: draft.fullName?.toPersisted(),
+      dateOfBirth: draft.dateOfBirth?.toPersisted(),
     };
 
     const existing = await this.repo.findOne({
@@ -54,6 +55,7 @@ export class TypeOrmPatientRecordRepository extends Port {
       phoneNumber: phone ?? null,
       residentialAddress: null,
       fullName: fullName ?? null,
+      dateOfBirth: dateOfBirth ?? null,
     });
 
     const loaded = await this.repo.findOneOrFail({
@@ -80,6 +82,7 @@ export class TypeOrmPatientRecordRepository extends Port {
       phoneNumber: update.phoneNumber?.toPersisted() ?? null,
       residentialAddress: update.residentialAddress?.toPersisted() ?? null,
       fullName: update.fullName?.toPersisted() ?? null,
+      dateOfBirth: update.dateOfBirth?.toPersisted() ?? null,
     };
 
     await this.repo.update({ id: entity.id }, payload);
@@ -120,6 +123,7 @@ export class TypeOrmPatientRecordRepository extends Port {
       phoneNumber,
       residentialAddress,
       fullName,
+      dateOfBirth,
       updatedAt,
     } = entity;
 
@@ -132,6 +136,7 @@ export class TypeOrmPatientRecordRepository extends Port {
         ? EncryptedValue.fromPersisted(residentialAddress)
         : undefined,
       fullName ? EncryptedValue.fromPersisted(fullName) : undefined,
+      dateOfBirth ? EncryptedValue.fromPersisted(dateOfBirth) : undefined,
       updatedAt,
     );
   }

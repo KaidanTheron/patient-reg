@@ -1,7 +1,6 @@
 // @ts-check
 import eslint from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier/flat";
-import eslintPluginPrettier from "eslint-plugin-prettier";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -64,11 +63,6 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-argument": "warn",
     },
   },
-  {
-    plugins: { prettier: eslintPluginPrettier },
-    rules: {
-      "prettier/prettier": "error",
-    },
-  },
+  // Disables rules that conflict with Prettier; run `pnpm run format` to apply .prettierrc
   eslintConfigPrettier,
 );

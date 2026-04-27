@@ -30,6 +30,9 @@ export class PatientRecordEntity {
   @Column({ type: "text", nullable: true })
   fullName: string | null;
 
+  @Column({ type: "text", nullable: true })
+  dateOfBirth: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

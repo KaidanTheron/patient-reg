@@ -248,6 +248,7 @@ class InMemoryPatientRecordRepository extends PatientRecordRepository {
       draft.phoneNumber,
       undefined,
       draft.fullName,
+      draft.dateOfBirth,
       new Date(0),
     );
     this.byIdentity.set(k, created);
@@ -270,6 +271,7 @@ class InMemoryPatientRecordRepository extends PatientRecordRepository {
       update.phoneNumber ?? existing.phoneNumber,
       update.residentialAddress ?? existing.residentialAddress,
       update.fullName !== undefined ? update.fullName : existing.fullName,
+      update.dateOfBirth !== undefined ? update.dateOfBirth : existing.dateOfBirth,
       new Date(1),
     );
     this.byIdentity.set(k, next);
@@ -292,6 +294,29 @@ class InMemoryPatientRecordRepository extends PatientRecordRepository {
       existing.phoneNumber,
       existing.residentialAddress,
       EncryptedValue.fromPersisted(`t:${fullName}`),
+      existing.dateOfBirth,
+      existing.updatedAt,
+    );
+    this.byIdentity.set(k, next);
+  }
+
+  async updateDateOfBirth(
+    patientIdentityId: HashedRsaId,
+    dateOfBirth: string,
+  ): Promise<void> {
+    const k = patientIdentityId.toString();
+    const existing = this.byIdentity.get(k);
+    if (!existing) {
+      return;
+    }
+    const next = new PatientRecord(
+      existing.id,
+      existing.patientIdentityId,
+      existing.email,
+      existing.phoneNumber,
+      existing.residentialAddress,
+      existing.fullName,
+      EncryptedValue.fromPersisted(`t:${dateOfBirth}`),
       existing.updatedAt,
     );
     this.byIdentity.set(k, next);
@@ -345,6 +370,7 @@ class InMemoryRegistrationDocumentRepository extends RegistrationDocumentReposit
       document.phoneNumber,
       document.residentialAddress,
       document.fullName,
+      document.dateOfBirth,
       new Date(0),
     );
     this.byId.set(id, created);
@@ -367,6 +393,7 @@ class InMemoryRegistrationDocumentRepository extends RegistrationDocumentReposit
       update.phoneNumber,
       update.residentialAddress,
       update.fullName,
+      update.dateOfBirth,
       update.submittedAt,
     );
     this.byId.set(id, next);
@@ -607,6 +634,7 @@ describe("RegistrationService", () => {
         EncryptedValue.fromPersisted("t:0821111111"),
         EncryptedValue.fromPersisted("t:1 Test St"),
         EncryptedValue.fromPersisted("t:Document Person"),
+        EncryptedValue.fromPersisted("t:1990-06-15"),
       ),
     );
 
@@ -644,6 +672,9 @@ describe("RegistrationService", () => {
     await expect(rec?.fullName?.decrypt(encrypter)).resolves.toBe(
       "Document Person",
     );
+    await expect(rec?.dateOfBirth?.decrypt(encrypter)).resolves.toBe(
+      "1990-06-15",
+    );
   });
 
   it("rejects approval when the request belongs to another practice", async () => {
@@ -663,6 +694,7 @@ describe("RegistrationService", () => {
         EncryptedValue.fromPersisted("t:1"),
         EncryptedValue.fromPersisted("t:x"),
         EncryptedValue.fromPersisted("t:X"),
+        EncryptedValue.fromPersisted("t:2000-01-01"),
       ),
     );
 
@@ -878,6 +910,8 @@ describe("RegistrationService", () => {
       email: "patient@example.com",
       phone: undefined,
       residentialAddress: undefined,
+      fullName: undefined,
+      dateOfBirth: undefined,
     });
   });
 
@@ -940,6 +974,7 @@ describe("RegistrationService", () => {
       email: "me@mail.test",
       phoneNumber: "0820000000",
       residentialAddress: "1 Example Rd",
+      dateOfBirth: "1991-05-20",
     });
 
     expect(out).toEqual({
@@ -955,7 +990,7 @@ describe("RegistrationService", () => {
       expect.arrayContaining([
         expect.objectContaining({
           registrationRequestId: "req-doc-1",
-          patientName: "Me Myself",
+          patientName: null,
         }),
       ]),
     );
@@ -973,6 +1008,7 @@ describe("RegistrationService", () => {
         email: "a@b.c",
         phoneNumber: "1",
         residentialAddress: "a",
+        dateOfBirth: "2000-01-01",
       }),
     ).rejects.toThrow("Registration request not found");
   });
@@ -1000,6 +1036,7 @@ describe("RegistrationService", () => {
         EncryptedValue.fromPersisted("t:1"),
         EncryptedValue.fromPersisted("t:old"),
         EncryptedValue.fromPersisted("t:Old Name"),
+        EncryptedValue.fromPersisted("t:1990-01-01"),
         new Date(0),
       ),
     );
@@ -1011,6 +1048,7 @@ describe("RegistrationService", () => {
       email: "new@e.test",
       phoneNumber: "082",
       residentialAddress: "2 New St",
+      dateOfBirth: "1991-12-12",
     });
 
     const doc =
@@ -1041,6 +1079,7 @@ describe("RegistrationService", () => {
         email: "a@b.c",
         phoneNumber: "1",
         residentialAddress: "a",
+        dateOfBirth: "2000-01-01",
       }),
     ).rejects.toThrow("Cannot submit registration in current state");
   });
@@ -1067,6 +1106,7 @@ describe("RegistrationService", () => {
         email: "a@b.c",
         phoneNumber: "1",
         residentialAddress: "a",
+        dateOfBirth: "2000-01-01",
       }),
     ).rejects.toThrow("Session is not valid for this registration request");
   });

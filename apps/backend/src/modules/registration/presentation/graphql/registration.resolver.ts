@@ -73,6 +73,7 @@ export class RegistrationResolver {
       email: input.email,
       phoneNumber: input.phoneNumber,
       residentialAddress: input.residentialAddress,
+      dateOfBirth: input.dateOfBirth,
     });
   }
 
@@ -98,6 +99,21 @@ export class RegistrationResolver {
       maxAttempts: r.maxAttempts,
       attemptsAfterFailure: r.attemptsAfterFailure,
     };
+  }
+
+  /**
+   * Derives date of birth from a valid 13-digit RSA ID (Luhn). Returns
+   * `YYYY-MM-DD` in the local calendar sense of the derived date.
+   */
+  @Query(() => String, {
+    name: "dateOfBirthFromRsaId",
+    description:
+      "ISO-8601 date (YYYY-MM-DD) derived from the RSA ID, for form UX.",
+  })
+  dateOfBirthFromRsaId(
+    @Args("rsaId", { description: "13-digit RSA ID" }) rsaId: string,
+  ): string {
+    return this.registration.deriveDateOfBirthFromRsaId(rsaId);
   }
 
   @Query(() => PracticePayload, { nullable: true })
@@ -137,6 +153,8 @@ export class RegistrationResolver {
       email: d.email ?? null,
       phone: d.phone ?? null,
       residentialAddress: d.residentialAddress ?? null,
+      fullName: d.fullName ?? null,
+      dateOfBirth: d.dateOfBirth ?? null,
     };
   }
 

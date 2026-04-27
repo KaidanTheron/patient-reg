@@ -36,6 +36,10 @@ export class RegistrationDocumentEntity {
   @Column({ type: "text", nullable: true })
   fullName: string | null;
 
+  /** Encrypted; typically `YYYY-MM-DD` plaintext before encryption. */
+  @Column({ type: "text", nullable: true })
+  dateOfBirth: string | null;
+
   @Column({ type: "timestamptz" })
   submittedAt: Date;
 

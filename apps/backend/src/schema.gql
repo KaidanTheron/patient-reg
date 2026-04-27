@@ -26,7 +26,9 @@ type Mutation {
 }
 
 type PatientProfilePayload {
+  dateOfBirth: String
   email: String
+  fullName: String
   phone: String
   residentialAddress: String
 }
@@ -37,6 +39,11 @@ type PracticePayload {
 }
 
 type Query {
+  """ISO-8601 date (YYYY-MM-DD) derived from the RSA ID, for form UX."""
+  dateOfBirthFromRsaId(
+    """13-digit RSA ID"""
+    rsaId: String!
+  ): String!
   myPatientProfile: PatientProfilePayload!
   myRegistrationRequest(id: String!): RegistrationRequestPayload!
   myRegistrationRequests: [RegistrationRequestPayload!]!
@@ -54,6 +61,7 @@ type RegistrationRequestPayload {
 }
 
 input SubmitRegistrationDocumentInput {
+  dateOfBirth: String!
   email: String!
   fullName: String!
   phoneNumber: String!

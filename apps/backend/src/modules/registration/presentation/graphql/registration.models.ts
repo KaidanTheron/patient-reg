@@ -52,6 +52,9 @@ export class SubmitRegistrationDocumentInput {
 
   @Field()
   residentialAddress: string;
+
+  @Field()
+  dateOfBirth: string;
 }
 
 @ObjectType()
@@ -92,6 +95,12 @@ export class PatientProfilePayload {
 
   @Field(() => String, { nullable: true })
   residentialAddress?: string | null;
+
+  @Field(() => String, { nullable: true })
+  fullName?: string | null;
+
+  @Field(() => String, { nullable: true })
+  dateOfBirth?: string | null;
 }
 
 @ObjectType()

@@ -38,6 +38,7 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
       phoneNumber: document.phoneNumber.toPersisted(),
       residentialAddress: document.residentialAddress.toPersisted(),
       fullName: document.fullName.toPersisted(),
+      dateOfBirth: document.dateOfBirth.toPersisted(),
       submittedAt,
     });
     return this.toDomain(
@@ -69,6 +70,7 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
         phoneNumber: update.phoneNumber.toPersisted(),
         residentialAddress: update.residentialAddress.toPersisted(),
         fullName: update.fullName.toPersisted(),
+        dateOfBirth: update.dateOfBirth.toPersisted(),
         submittedAt: update.submittedAt,
       },
     );
@@ -95,6 +97,9 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
       EncryptedValue.fromPersisted(entity.residentialAddress),
       entity.fullName
         ? EncryptedValue.fromPersisted(entity.fullName)
+        : undefined,
+      entity.dateOfBirth
+        ? EncryptedValue.fromPersisted(entity.dateOfBirth)
         : undefined,
       entity.submittedAt,
     );
