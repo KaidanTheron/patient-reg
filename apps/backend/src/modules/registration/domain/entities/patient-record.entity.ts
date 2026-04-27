@@ -1,6 +1,10 @@
 import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
-import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
-import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
+import {
+  ContactDetails,
+  MedicalAidDetails,
+  MedicalHistory,
+  PersonalInformation
+} from "~/modules/registration/domain/value-objects";
 
 /**
  * Baseline fields copied from {@link PatientIdentity} when the patient first
@@ -10,10 +14,10 @@ import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
 export class DraftPatientRecord {
   constructor(
     public readonly patientIdentityId: HashedRsaId,
-    public readonly email?: EncryptedValue,
-    public readonly phoneNumber?: EncryptedValue,
-    public readonly fullName?: EncryptedValue,
-    public readonly dateOfBirth?: EncryptedValue<IsoDate>,
+    public readonly contactDetails: ContactDetails,
+    public readonly personalInformation: PersonalInformation,
+    public readonly medicalAidDetails: MedicalAidDetails,
+    public readonly medicalHistory: MedicalHistory,
   ) {}
 }
 
@@ -22,11 +26,10 @@ export class DraftPatientRecord {
  */
 export class UpdatePatientRecord {
   constructor(
-    public readonly email: EncryptedValue | undefined,
-    public readonly phoneNumber: EncryptedValue | undefined,
-    public readonly residentialAddress: EncryptedValue | undefined,
-    public readonly fullName: EncryptedValue | undefined,
-    public readonly dateOfBirth: EncryptedValue<IsoDate> | undefined,
+    public readonly contactDetails: ContactDetails,
+    public readonly personalInformation: PersonalInformation,
+    public readonly medicalAidDetails: MedicalAidDetails,
+    public readonly medicalHistory: MedicalHistory,
   ) {}
 }
 
@@ -38,11 +41,10 @@ export class PatientRecord {
   constructor(
     public readonly id: string,
     public readonly patientIdentityId: HashedRsaId,
-    public readonly email: EncryptedValue | undefined,
-    public readonly phoneNumber: EncryptedValue | undefined,
-    public readonly residentialAddress: EncryptedValue | undefined,
-    public readonly fullName: EncryptedValue | undefined,
-    public readonly dateOfBirth: EncryptedValue<IsoDate> | undefined,
+    public readonly contactDetails: ContactDetails,
+    public readonly personalInformation: PersonalInformation,
+    public readonly medicalAidDetails: MedicalAidDetails,
+    public readonly medicalHistory: MedicalHistory,
     public readonly updatedAt: Date,
   ) {}
 }

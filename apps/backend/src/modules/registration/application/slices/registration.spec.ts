@@ -49,6 +49,12 @@ import {
 import { EncryptedValue } from "~/modules/registration/domain/value-objects/encrypted-value";
 import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
 import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
+import {
+  ContactDetails,
+  MedicalAidDetails,
+  MedicalHistory,
+  PersonalInformation,
+} from "~/modules/registration/domain/value-objects";
 import { RegistrationLinkStatus } from "~/modules/registration/domain/value-objects/registration-link-status";
 import { RegistrationStatus } from "~/modules/registration/domain/value-objects/registration-status";
 import { ProtectedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
@@ -245,11 +251,10 @@ class InMemoryPatientRecordRepository extends PatientRecordRepository {
     const created = new PatientRecord(
       `patient-record-${this.nextId++}`,
       draft.patientIdentityId,
-      draft.email,
-      draft.phoneNumber,
-      undefined,
-      draft.fullName,
-      draft.dateOfBirth,
+      draft.contactDetails,
+      draft.personalInformation,
+      draft.medicalAidDetails,
+      draft.medicalHistory,
       new Date(0),
     );
     this.byIdentity.set(k, created);
@@ -268,59 +273,14 @@ class InMemoryPatientRecordRepository extends PatientRecordRepository {
     const next = new PatientRecord(
       existing.id,
       existing.patientIdentityId,
-      update.email ?? existing.email,
-      update.phoneNumber ?? existing.phoneNumber,
-      update.residentialAddress ?? existing.residentialAddress,
-      update.fullName !== undefined ? update.fullName : existing.fullName,
-      update.dateOfBirth !== undefined ? update.dateOfBirth : existing.dateOfBirth,
+      update.contactDetails,
+      update.personalInformation,
+      update.medicalAidDetails,
+      update.medicalHistory,
       new Date(1),
     );
     this.byIdentity.set(k, next);
     return next;
-  }
-
-  async updateFullName(
-    patientIdentityId: HashedRsaId,
-    fullName: string,
-  ): Promise<void> {
-    const k = patientIdentityId.toString();
-    const existing = this.byIdentity.get(k);
-    if (!existing) {
-      return;
-    }
-    const next = new PatientRecord(
-      existing.id,
-      existing.patientIdentityId,
-      existing.email,
-      existing.phoneNumber,
-      existing.residentialAddress,
-      EncryptedValue.fromPersisted(`t:${fullName}`),
-      existing.dateOfBirth,
-      existing.updatedAt,
-    );
-    this.byIdentity.set(k, next);
-  }
-
-  async updateDateOfBirth(
-    patientIdentityId: HashedRsaId,
-    dateOfBirth: string,
-  ): Promise<void> {
-    const k = patientIdentityId.toString();
-    const existing = this.byIdentity.get(k);
-    if (!existing) {
-      return;
-    }
-    const next = new PatientRecord(
-      existing.id,
-      existing.patientIdentityId,
-      existing.email,
-      existing.phoneNumber,
-      existing.residentialAddress,
-      existing.fullName,
-      EncryptedValue.fromPersisted(`t:${dateOfBirth}`, IsoDate.fromSerialized),
-      existing.updatedAt,
-    );
-    this.byIdentity.set(k, next);
   }
 }
 
@@ -367,11 +327,10 @@ class InMemoryRegistrationDocumentRepository extends RegistrationDocumentReposit
       id,
       document.registrationRequestId,
       document.patientIdentityId,
-      document.email,
-      document.phoneNumber,
-      document.residentialAddress,
-      document.fullName,
-      document.dateOfBirth,
+      document.contactDetails,
+      document.personalInformation,
+      document.medicalAidDetails,
+      document.medicalHistory,
       new Date(0),
     );
     this.byId.set(id, created);
@@ -390,11 +349,10 @@ class InMemoryRegistrationDocumentRepository extends RegistrationDocumentReposit
       id,
       existing.registrationRequestId,
       existing.patientIdentityId,
-      update.email,
-      update.phoneNumber,
-      update.residentialAddress,
-      update.fullName,
-      update.dateOfBirth,
+      update.contactDetails,
+      update.personalInformation,
+      update.medicalAidDetails,
+      update.medicalHistory,
       update.submittedAt,
     );
     this.byId.set(id, next);
@@ -631,11 +589,19 @@ describe("RegistrationService", () => {
       new DraftRegistrationDocument(
         request.id,
         patientIdentityId,
-        EncryptedValue.fromPersisted("t:doc@example.com"),
-        EncryptedValue.fromPersisted("t:0821111111"),
-        EncryptedValue.fromPersisted("t:1 Test St"),
-        EncryptedValue.fromPersisted("t:Document Person"),
-        EncryptedValue.fromPersisted("t:1990-06-15", IsoDate.fromSerialized),
+        ContactDetails.create({
+          email: EncryptedValue.fromPersisted("t:doc@example.com"),
+          phone: EncryptedValue.fromPersisted("t:0821111111"),
+          address: EncryptedValue.fromPersisted("t:1 Test St"),
+        }),
+        PersonalInformation.create({
+          dateOfBirth: EncryptedValue.fromPersisted(
+            "t:1990-06-15T00:00:00.000+00:00",
+            IsoDate.fromSerialized,
+          ),
+        }),
+        MedicalAidDetails.create({}),
+        MedicalHistory.create({}),
       ),
     );
 
@@ -661,20 +627,19 @@ describe("RegistrationService", () => {
     expect(link.practiceId).toBe("practice-1");
 
     const rec = await patientRecords.findByPatientIdentity(patientIdentityId);
-    await expect(rec?.email?.decrypt(encrypter)).resolves.toBe(
+    await expect(rec?.contactDetails.email?.decrypt(encrypter)).resolves.toBe(
       "doc@example.com",
     );
-    await expect(rec?.phoneNumber?.decrypt(encrypter)).resolves.toBe(
+    await expect(rec?.contactDetails.phone?.decrypt(encrypter)).resolves.toBe(
       "0821111111",
     );
-    await expect(rec?.residentialAddress?.decrypt(encrypter)).resolves.toBe(
+    await expect(rec?.contactDetails.address?.decrypt(encrypter)).resolves.toBe(
       "1 Test St",
     );
-    await expect(rec?.fullName?.decrypt(encrypter)).resolves.toBe(
-      "Document Person",
-    );
     await expect(
-      rec?.dateOfBirth?.decrypt(encrypter).then((d) => d.serialize()),
+      rec?.personalInformation.dateOfBirth
+        ?.decrypt(encrypter)
+        .then((d) => d.serialize()),
     ).resolves.toMatch(/^1990-06-15T/);
   });
 
@@ -691,11 +656,10 @@ describe("RegistrationService", () => {
       new DraftRegistrationDocument(
         request.id,
         patientIdentityId,
-        EncryptedValue.fromPersisted("t:a@b.c"),
-        EncryptedValue.fromPersisted("t:1"),
-        EncryptedValue.fromPersisted("t:x"),
-        EncryptedValue.fromPersisted("t:X"),
-        EncryptedValue.fromPersisted("t:2000-01-01", IsoDate.fromSerialized),
+        ContactDetails.create({ email: EncryptedValue.fromPersisted("t:a@b.c") }),
+        PersonalInformation.create({}),
+        MedicalAidDetails.create({}),
+        MedicalHistory.create({}),
       ),
     );
 
@@ -907,12 +871,16 @@ describe("RegistrationService", () => {
     const patientSession =
       await protectedPatientSession.verify("sess:prof-link");
     const details = await service.getPatientDetailsForSession(patientSession);
-    expect(details).toEqual({
+    expect(details).toMatchObject({
       email: "patient@example.com",
       phone: undefined,
+      altphone: undefined,
       residentialAddress: undefined,
-      fullName: undefined,
+      firstname: undefined,
+      lastname: undefined,
       dateOfBirth: undefined,
+      gender: undefined,
+      scheme: undefined,
     });
   });
 
@@ -971,11 +939,10 @@ describe("RegistrationService", () => {
     const out = await service.submitRegistrationDocument({
       patientSession,
       registrationRequestId: req.id,
-      fullName: "Me Myself",
-      email: "me@mail.test",
-      phoneNumber: "0820000000",
-      residentialAddress: "1 Example Rd",
-      dateOfBirth: "1991-05-20",
+      contactDetails: { email: "me@mail.test", phone: "0820000000", residentialAddress: "1 Example Rd" },
+      personalInformation: { dateOfBirth: "1991-05-20T00:00:00.000+00:00" },
+      medicalAidDetails: {},
+      medicalHistory: {},
     });
 
     expect(out).toEqual({
@@ -1005,11 +972,10 @@ describe("RegistrationService", () => {
       service.submitRegistrationDocument({
         patientSession,
         registrationRequestId: "nonexistent",
-        fullName: "A",
-        email: "a@b.c",
-        phoneNumber: "1",
-        residentialAddress: "a",
-        dateOfBirth: "2000-01-01",
+        contactDetails: { email: "a@b.c" },
+        personalInformation: {},
+        medicalAidDetails: {},
+        medicalHistory: {},
       }),
     ).rejects.toThrow("Registration request not found");
   });
@@ -1033,11 +999,10 @@ describe("RegistrationService", () => {
         "doc-1",
         "req-doc-3",
         patient,
-        EncryptedValue.fromPersisted("t:old@e.test"),
-        EncryptedValue.fromPersisted("t:1"),
-        EncryptedValue.fromPersisted("t:old"),
-        EncryptedValue.fromPersisted("t:Old Name"),
-        EncryptedValue.fromPersisted("t:1990-01-01", IsoDate.fromSerialized),
+        ContactDetails.create({ email: EncryptedValue.fromPersisted("t:old@e.test") }),
+        PersonalInformation.create({}),
+        MedicalAidDetails.create({}),
+        MedicalHistory.create({}),
         new Date(0),
       ),
     );
@@ -1045,16 +1010,15 @@ describe("RegistrationService", () => {
     await service.submitRegistrationDocument({
       patientSession: resubmitSession,
       registrationRequestId: "req-doc-3",
-      fullName: "New Name",
-      email: "new@e.test",
-      phoneNumber: "082",
-      residentialAddress: "2 New St",
-      dateOfBirth: "1991-12-12",
+      contactDetails: { email: "new@e.test", phone: "082", residentialAddress: "2 New St" },
+      personalInformation: { dateOfBirth: "1991-12-12T00:00:00.000+00:00" },
+      medicalAidDetails: {},
+      medicalHistory: {},
     });
 
     const doc =
       (await registrationDocuments.findByRegistrationRequestId("req-doc-3"))!;
-    await expect(doc.email.decrypt(encrypter)).resolves.toBe("new@e.test");
+    await expect(doc.contactDetails.email?.decrypt(encrypter)).resolves.toBe("new@e.test");
     const stored = await registrationRequests.findById("req-doc-3");
     expect(stored?.getStatus().toString()).toBe("AWAITING_REVIEW");
   });
@@ -1076,11 +1040,10 @@ describe("RegistrationService", () => {
       service.submitRegistrationDocument({
         patientSession,
         registrationRequestId: req.id,
-        fullName: "A",
-        email: "a@b.c",
-        phoneNumber: "1",
-        residentialAddress: "a",
-        dateOfBirth: "2000-01-01",
+        contactDetails: { email: "a@b.c" },
+        personalInformation: {},
+        medicalAidDetails: {},
+        medicalHistory: {},
       }),
     ).rejects.toThrow("Cannot submit registration in current state");
   });
@@ -1103,11 +1066,10 @@ describe("RegistrationService", () => {
       service.submitRegistrationDocument({
         patientSession,
         registrationRequestId: req.id,
-        fullName: "A",
-        email: "a@b.c",
-        phoneNumber: "1",
-        residentialAddress: "a",
-        dateOfBirth: "2000-01-01",
+        contactDetails: { email: "a@b.c" },
+        personalInformation: {},
+        medicalAidDetails: {},
+        medicalHistory: {},
       }),
     ).rejects.toThrow("Session is not valid for this registration request");
   });
@@ -1188,7 +1150,7 @@ describe("RegistrationService", () => {
     const pr = await patientRecords.findByPatientIdentity(
       HashedRsaId.fromPersisted(hashedRsaId),
     );
-    await expect(pr?.email?.decrypt(encrypter)).resolves.toBe(
+    await expect(pr?.contactDetails.email?.decrypt(encrypter)).resolves.toBe(
       "patient@example.com",
     );
   });

@@ -43,6 +43,16 @@ import { type VerifiedPatientSession } from "~/modules/registration/application/
 import { type VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
 import { formatLocalDateAsIsoDate } from "~/common/date";
 import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
+import {
+  ContactDetails,
+  Gender,
+  GenderValue,
+  MedicalAidDetails,
+  MedicalAidScheme,
+  MedicalAidSchemeValue,
+  MedicalHistory,
+  PersonalInformation,
+} from "~/modules/registration/domain/value-objects";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -90,12 +100,33 @@ export type DeriveDataCommand = {
 export type SubmitRegistrationDocumentCommand = {
   patientSession: VerifiedPatientSession;
   registrationRequestId: string;
-  fullName: string;
-  email: string;
-  phoneNumber: string;
-  residentialAddress: string;
-  /** ISO date `YYYY-MM-DD` (e.g. from `dateOfBirthFromRsaId` or manual entry). */
-  dateOfBirth: string;
+  contactDetails: {
+    email?: string;
+    phone?: string;
+    altphone?: string;
+    residentialAddress?: string;
+  };
+  personalInformation: {
+    firstname?: string;
+    lastname?: string;
+    /** ISO date `YYYY-MM-DD` (e.g. from `dateOfBirthFromRsaId` or manual entry). */
+    dateOfBirth?: string;
+    gender?: GenderValue;
+  };
+  medicalAidDetails: {
+    scheme?: MedicalAidSchemeValue;
+    memberNumber?: string;
+    mainMember?: string;
+    mainMemberId?: string;
+    dependantCode?: string;
+  };
+  medicalHistory: {
+    allergies?: string;
+    currentMedication?: string;
+    chronicConditions?: string;
+    previousSurgeries?: string;
+    familyHistory?: string;
+  };
 };
 
 export type SubmitRegistrationDocumentResult = {
@@ -143,13 +174,30 @@ export type VerifyRegistrationResult =
       attemptsAfterFailure?: number;
     };
 
-/** Decrypted profile fields for the session’s patient; sourced from the canonical patient record. */
+/** Decrypted profile fields for the session's patient; sourced from the canonical patient record. */
 export type PatientSessionDetails = {
+  // ContactDetails
   email?: string;
   phone?: string;
+  altphone?: string;
   residentialAddress?: string;
-  fullName?: string;
+  // PersonalInformation
+  firstname?: string;
+  lastname?: string;
   dateOfBirth?: string;
+  gender?: string;
+  // MedicalAidDetails
+  scheme?: string;
+  memberNumber?: string;
+  mainMember?: string;
+  mainMemberId?: string;
+  dependantCode?: string;
+  // MedicalHistory
+  allergies?: string;
+  currentMedication?: string;
+  chronicConditions?: string;
+  previousSurgeries?: string;
+  familyHistory?: string;
 };
 
 @Injectable()
@@ -215,14 +263,13 @@ export class RegistrationService {
         throw new Error("Patient identity not found for this registration");
       }
 
-      const { email, phone, fullName: idFullName } = identity;
-
       await this.patientRecords.ensureFromIdentity(
         new DraftPatientRecord(
           request.patientIdentityId,
-          email,
-          phone,
-          idFullName,
+          ContactDetails.create({ email: identity.email, phone: identity.phone }),
+          PersonalInformation.create({}),
+          MedicalAidDetails.create({}),
+          MedicalHistory.create({}),
         ),
       );
     }
@@ -230,11 +277,10 @@ export class RegistrationService {
     await this.patientRecords.update(
       request.patientIdentityId,
       new UpdatePatientRecord(
-        document.email,
-        document.phoneNumber,
-        document.residentialAddress,
-        document.fullName,
-        document.dateOfBirth,
+        document.contactDetails,
+        document.personalInformation,
+        document.medicalAidDetails,
+        document.medicalHistory,
       ),
     );
 
@@ -438,51 +484,92 @@ export class RegistrationService {
       throw new Error("Session is not valid for this registration request");
     }
 
-    const fullNamePlain = command.fullName.trim();
-    const email = command.email.trim();
-    const phoneNumber = command.phoneNumber.trim();
-    const residentialAddress = command.residentialAddress.trim();
-    const dateOfBirthPlain = command.dateOfBirth.trim();
-    if (!fullNamePlain) {
-      throw new Error("Full name is required");
-    }
-    if (!email || !phoneNumber || !residentialAddress) {
-      throw new Error(
-        "Email, phone number, and residential address are required",
-      );
-    }
-    if (!dateOfBirthPlain) {
-      throw new Error("Date of birth is required");
-    }
+    // ── ContactDetails ──────────────────────────────────────────────────────
+    const { contactDetails: cd, personalInformation: pi } = command;
+    const { medicalAidDetails: ma, medicalHistory: mh } = command;
 
-    const [encEmail, encPhone, encAddress, encFullName, encDob] =
+    const [encEmail, encPhone, encAltphone, encAddress] = await Promise.all([
+      cd.email ? EncryptedValue.create(cd.email.trim(), this.encrypter) : undefined,
+      cd.phone ? EncryptedValue.create(cd.phone.trim(), this.encrypter) : undefined,
+      cd.altphone ? EncryptedValue.create(cd.altphone.trim(), this.encrypter) : undefined,
+      cd.residentialAddress ? EncryptedValue.create(cd.residentialAddress.trim(), this.encrypter) : undefined,
+    ]);
+
+    const contactDetailsVo = ContactDetails.create({
+      email: encEmail,
+      phone: encPhone,
+      altphone: encAltphone,
+      address: encAddress,
+    });
+
+    // ── PersonalInformation ─────────────────────────────────────────────────
+    const [encFirstname, encLastname, encDob] = await Promise.all([
+      pi.firstname ? EncryptedValue.create(pi.firstname.trim(), this.encrypter) : undefined,
+      pi.lastname ? EncryptedValue.create(pi.lastname.trim(), this.encrypter) : undefined,
+      pi.dateOfBirth
+        ? EncryptedValue.create(
+            IsoDate.fromSerialized(pi.dateOfBirth.trim()),
+            this.encrypter,
+            IsoDate.fromSerialized,
+          )
+        : undefined,
+    ]);
+
+    const personalInformationVo = PersonalInformation.create({
+      firstname: encFirstname,
+      lastname: encLastname,
+      dateOfBirth: encDob,
+      gender: pi.gender ? Gender.create(pi.gender) : undefined,
+    });
+
+    // ── MedicalAidDetails ───────────────────────────────────────────────────
+    const [encMemberNumber, encMainMember, encMainMemberId, encDependantCode] =
       await Promise.all([
-        EncryptedValue.create(email, this.encrypter),
-        EncryptedValue.create(phoneNumber, this.encrypter),
-        EncryptedValue.create(residentialAddress, this.encrypter),
-        EncryptedValue.create(fullNamePlain, this.encrypter),
-        EncryptedValue.create(
-          IsoDate.fromSerialized(dateOfBirthPlain),
-          this.encrypter,
-          IsoDate.fromSerialized,
-        ),
+        ma.memberNumber ? EncryptedValue.create(ma.memberNumber.trim(), this.encrypter) : undefined,
+        ma.mainMember ? EncryptedValue.create(ma.mainMember.trim(), this.encrypter) : undefined,
+        ma.mainMemberId ? EncryptedValue.create(ma.mainMemberId.trim(), this.encrypter) : undefined,
+        ma.dependantCode ? EncryptedValue.create(ma.dependantCode.trim(), this.encrypter) : undefined,
       ]);
+
+    const medicalAidDetailsVo = MedicalAidDetails.create({
+      scheme: ma.scheme ? MedicalAidScheme.create(ma.scheme) : undefined,
+      memberNumber: encMemberNumber,
+      mainMember: encMainMember,
+      mainMemberId: encMainMemberId,
+      dependantCode: encDependantCode,
+    });
+
+    // ── MedicalHistory ──────────────────────────────────────────────────────
+    const [encAllergies, encMedication, encChronic, encSurgeries, encFamily] =
+      await Promise.all([
+        mh.allergies ? EncryptedValue.create(mh.allergies.trim(), this.encrypter) : undefined,
+        mh.currentMedication ? EncryptedValue.create(mh.currentMedication.trim(), this.encrypter) : undefined,
+        mh.chronicConditions ? EncryptedValue.create(mh.chronicConditions.trim(), this.encrypter) : undefined,
+        mh.previousSurgeries ? EncryptedValue.create(mh.previousSurgeries.trim(), this.encrypter) : undefined,
+        mh.familyHistory ? EncryptedValue.create(mh.familyHistory.trim(), this.encrypter) : undefined,
+      ]);
+
+    const medicalHistoryVo = MedicalHistory.create({
+      allergies: encAllergies,
+      currentMedication: encMedication,
+      chronicConditions: encChronic,
+      previousSurgeries: encSurgeries,
+      familyHistory: encFamily,
+    });
 
     request.submit(patientIdentityId);
 
     const existing =
       await this.registrationDocuments.findByRegistrationRequestId(request.id);
     if (existing) {
-      const submittedAt = new Date();
       await this.registrationDocuments.update(
         existing.id,
         new UpdateRegistrationDocument(
-          encEmail,
-          encPhone,
-          encAddress,
-          encFullName,
-          encDob,
-          submittedAt,
+          contactDetailsVo,
+          personalInformationVo,
+          medicalAidDetailsVo,
+          medicalHistoryVo,
+          new Date(),
         ),
       );
     } else {
@@ -490,11 +577,10 @@ export class RegistrationService {
         new DraftRegistrationDocument(
           request.id,
           request.patientIdentityId,
-          encEmail,
-          encPhone,
-          encAddress,
-          encFullName,
-          encDob,
+          contactDetailsVo,
+          personalInformationVo,
+          medicalAidDetailsVo,
+          medicalHistoryVo,
         ),
       );
     }
@@ -619,10 +705,16 @@ export class RegistrationService {
 
     const patientIdentity = await this.patientIdentities.findById(hashed);
     if (patientIdentity) {
-      const { email, phone, fullName } = patientIdentity;
+      const { email, phone } = patientIdentity;
 
       await this.patientRecords.ensureFromIdentity(
-        new DraftPatientRecord(hashed, email, phone, fullName),
+        new DraftPatientRecord(
+          hashed,
+          ContactDetails.create({ email, phone }),
+          PersonalInformation.create({}),
+          MedicalAidDetails.create({}),
+          MedicalHistory.create({}),
+        ),
       );
     }
 
@@ -654,23 +746,53 @@ export class RegistrationService {
       throw new Error("Patient not found");
     }
 
-    const [email, phone, residentialAddress, fullName, dateOfBirth] =
-      await Promise.all([
-        record.email?.decrypt(this.encrypter),
-        record.phoneNumber?.decrypt(this.encrypter),
-        record.residentialAddress?.decrypt(this.encrypter),
-        record.fullName?.decrypt(this.encrypter),
-        record.dateOfBirth
-          ?.decrypt(this.encrypter)
-          .then((d) => d.serialize()),
-      ]);
+    const { contactDetails: cd, personalInformation: pi, medicalAidDetails: ma, medicalHistory: mh } = record;
+
+    const [
+      email, phone, altphone, residentialAddress,
+      firstname, lastname, dateOfBirth, gender,
+      scheme, memberNumber, mainMember, mainMemberId, dependantCode,
+      allergies, currentMedication, chronicConditions, previousSurgeries, familyHistory,
+    ] = await Promise.all([
+      cd.email?.decrypt(this.encrypter),
+      cd.phone?.decrypt(this.encrypter),
+      cd.altphone?.decrypt(this.encrypter),
+      cd.address?.decrypt(this.encrypter),
+      pi.firstname?.decrypt(this.encrypter),
+      pi.lastname?.decrypt(this.encrypter),
+      pi.dateOfBirth?.decrypt(this.encrypter).then((d) => d.serialize()),
+      Promise.resolve(pi.gender?.toString()),
+      Promise.resolve(ma.scheme?.toString()),
+      ma.memberNumber?.decrypt(this.encrypter),
+      ma.mainMember?.decrypt(this.encrypter),
+      ma.mainMemberId?.decrypt(this.encrypter),
+      ma.dependantCode?.decrypt(this.encrypter),
+      mh.allergies?.decrypt(this.encrypter),
+      mh.currentMedication?.decrypt(this.encrypter),
+      mh.chronicConditions?.decrypt(this.encrypter),
+      mh.previousSurgeries?.decrypt(this.encrypter),
+      mh.familyHistory?.decrypt(this.encrypter),
+    ]);
 
     return {
       email,
       phone,
+      altphone,
       residentialAddress,
-      fullName,
+      firstname,
+      lastname,
       dateOfBirth,
+      gender,
+      scheme,
+      memberNumber,
+      mainMember,
+      mainMemberId,
+      dependantCode,
+      allergies,
+      currentMedication,
+      chronicConditions,
+      previousSurgeries,
+      familyHistory,
     };
   }
 

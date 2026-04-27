@@ -1,6 +1,5 @@
-import { RegistrationStatus } from "~/modules/registration/domain/value-objects/registration-status";
+import { HashedRsaId, RegistrationStatus } from "~/modules/registration/domain/value-objects";
 import { RegistrationStatePolicy } from "~/modules/registration/domain/policies/registration-state.policy";
-import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 import { Practice } from "~/modules/registration/domain/entities/practice.entity";
 
 export class DraftRegistrationRequest {

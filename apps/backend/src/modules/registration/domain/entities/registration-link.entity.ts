@@ -1,5 +1,7 @@
-import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
-import { RegistrationLinkStatus } from "~/modules/registration/domain/value-objects/registration-link-status";
+import {
+  HashedRsaId,
+  RegistrationLinkStatus
+} from "~/modules/registration/domain/value-objects";
 import { RegistrationLinkPolicy } from "~/modules/registration/domain/policies/registration-link.policy";
 import {
   MAX_ATTEMPTS,

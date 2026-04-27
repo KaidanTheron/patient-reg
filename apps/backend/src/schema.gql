@@ -7,6 +7,20 @@ input ApproveRegistrationInput {
   registrationRequestId: String!
 }
 
+input ContactDetailsInput {
+  altphone: String
+  email: String
+  phone: String
+  residentialAddress: String
+}
+
+type ContactDetailsPayload {
+  altphone: String
+  email: String
+  phone: String
+  residentialAddress: String
+}
+
 input CreatePracticeInput {
   name: String!
 }
@@ -15,6 +29,38 @@ input InitiateRegistrationInput {
   initiatedByStaffId: String!
   practiceId: String!
   rsaId: String!
+}
+
+input MedicalAidDetailsInput {
+  dependantCode: String
+  mainMember: String
+  mainMemberId: String
+  memberNumber: String
+  scheme: String
+}
+
+type MedicalAidDetailsPayload {
+  dependantCode: String
+  mainMember: String
+  mainMemberId: String
+  memberNumber: String
+  scheme: String
+}
+
+input MedicalHistoryInput {
+  allergies: String
+  chronicConditions: String
+  currentMedication: String
+  familyHistory: String
+  previousSurgeries: String
+}
+
+type MedicalHistoryPayload {
+  allergies: String
+  chronicConditions: String
+  currentMedication: String
+  familyHistory: String
+  previousSurgeries: String
 }
 
 type Mutation {
@@ -26,11 +72,24 @@ type Mutation {
 }
 
 type PatientProfilePayload {
+  contactDetails: ContactDetailsPayload
+  medicalAidDetails: MedicalAidDetailsPayload
+  medicalHistory: MedicalHistoryPayload
+  personalInformation: PersonalInformationPayload
+}
+
+input PersonalInformationInput {
   dateOfBirth: String
-  email: String
-  fullName: String
-  phone: String
-  residentialAddress: String
+  firstname: String
+  gender: String
+  lastname: String
+}
+
+type PersonalInformationPayload {
+  dateOfBirth: String
+  firstname: String
+  gender: String
+  lastname: String
 }
 
 type PracticePayload {
@@ -61,12 +120,11 @@ type RegistrationRequestPayload {
 }
 
 input SubmitRegistrationDocumentInput {
-  dateOfBirth: String!
-  email: String!
-  fullName: String!
-  phoneNumber: String!
+  contactDetails: ContactDetailsInput
+  medicalAidDetails: MedicalAidDetailsInput
+  medicalHistory: MedicalHistoryInput
+  personalInformation: PersonalInformationInput
   registrationRequestId: String!
-  residentialAddress: String!
 }
 
 input VerifyRegistrationInput {

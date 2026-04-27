@@ -13,13 +13,14 @@ import {
   ApproveRegistrationInput,
   CreatePracticeInput,
   InitiateRegistrationInput,
-  PracticePayload,
   PatientProfilePayload,
+  PracticePayload,
   RegistrationRequestPayload,
   SubmitRegistrationDocumentInput,
   VerifyRegistrationInput,
   VerifyRegistrationPayload,
 } from "~/modules/registration/presentation/graphql/registration.models";
+import { GenderValue, MedicalAidSchemeValue } from "~/modules/registration/domain/value-objects";
 
 @Resolver()
 export class RegistrationResolver {
@@ -66,14 +67,40 @@ export class RegistrationResolver {
     @Args("input") input: SubmitRegistrationDocumentInput,
     @PatientSession() patientSession: VerifiedPatientSession,
   ): Promise<RegistrationRequestPayload> {
+    const cd = input.contactDetails ?? {};
+    const pi = input.personalInformation ?? {};
+    const ma = input.medicalAidDetails ?? {};
+    const mh = input.medicalHistory ?? {};
+
     return this.registration.submitRegistrationDocument({
       patientSession,
       registrationRequestId: input.registrationRequestId,
-      fullName: input.fullName,
-      email: input.email,
-      phoneNumber: input.phoneNumber,
-      residentialAddress: input.residentialAddress,
-      dateOfBirth: input.dateOfBirth,
+      contactDetails: {
+        email: cd.email,
+        phone: cd.phone,
+        altphone: cd.altphone,
+        residentialAddress: cd.residentialAddress,
+      },
+      personalInformation: {
+        firstname: pi.firstname,
+        lastname: pi.lastname,
+        dateOfBirth: pi.dateOfBirth,
+        gender: pi.gender as GenderValue | undefined,
+      },
+      medicalAidDetails: {
+        scheme: ma.scheme as MedicalAidSchemeValue | undefined,
+        memberNumber: ma.memberNumber,
+        mainMember: ma.mainMember,
+        mainMemberId: ma.mainMemberId,
+        dependantCode: ma.dependantCode,
+      },
+      medicalHistory: {
+        allergies: mh.allergies,
+        currentMedication: mh.currentMedication,
+        chronicConditions: mh.chronicConditions,
+        previousSurgeries: mh.previousSurgeries,
+        familyHistory: mh.familyHistory,
+      },
     });
   }
 
@@ -147,14 +174,34 @@ export class RegistrationResolver {
   async myPatientProfile(
     @PatientSession() patientSession: VerifiedPatientSession,
   ): Promise<PatientProfilePayload> {
-    const d =
-      await this.registration.getPatientDetailsForSession(patientSession);
+    const d = await this.registration.getPatientDetailsForSession(patientSession);
     return {
-      email: d.email ?? null,
-      phone: d.phone ?? null,
-      residentialAddress: d.residentialAddress ?? null,
-      fullName: d.fullName ?? null,
-      dateOfBirth: d.dateOfBirth ?? null,
+      contactDetails: {
+        email: d.email ?? null,
+        phone: d.phone ?? null,
+        altphone: d.altphone ?? null,
+        residentialAddress: d.residentialAddress ?? null,
+      },
+      personalInformation: {
+        firstname: d.firstname ?? null,
+        lastname: d.lastname ?? null,
+        dateOfBirth: d.dateOfBirth ?? null,
+        gender: d.gender ?? null,
+      },
+      medicalAidDetails: {
+        scheme: d.scheme ?? null,
+        memberNumber: d.memberNumber ?? null,
+        mainMember: d.mainMember ?? null,
+        mainMemberId: d.mainMemberId ?? null,
+        dependantCode: d.dependantCode ?? null,
+      },
+      medicalHistory: {
+        allergies: d.allergies ?? null,
+        currentMedication: d.currentMedication ?? null,
+        chronicConditions: d.chronicConditions ?? null,
+        previousSurgeries: d.previousSurgeries ?? null,
+        familyHistory: d.familyHistory ?? null,
+      },
     };
   }
 
