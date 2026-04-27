@@ -1,6 +1,6 @@
 import { Practice } from "../../domain/entities/practice.entity";
 import {
-  type DraftRegistrationDocument,
+  DraftRegistrationDocument,
   RegistrationDocument,
   UpdateRegistrationDocument,
 } from "../../domain/entities/registration-document.entity";
@@ -23,6 +23,7 @@ import { Encrypter } from "../../domain/ports/encrypter";
 import { Hasher } from "../../domain/ports/hasher";
 import { Notifier } from "../../domain/ports/notifier";
 import { PatientIdentityRepository } from "../../domain/ports/patient-identity.repository";
+import { PatientRecordRepository } from "../../domain/ports/patient-record.repository";
 import { PracticeRepository } from "../../domain/ports/practice.repository";
 import { PatientPracticeRepository } from "../../domain/ports/patient-practice.repository";
 import { RegistrationLinkFormatter } from "../../domain/ports/registration-link.formatter";
@@ -40,6 +41,11 @@ import { RegistrationLinkRepository } from "../../domain/ports/registration-link
 import { RegistrationRequestRepository } from "../../domain/ports/registration-request.repository";
 import { RegistrationDocumentRepository } from "../../domain/ports/registration-document.repository";
 import { PatientIdentity } from "../../domain/entities/patient-identity.entity";
+import {
+  DraftPatientRecord,
+  PatientRecord,
+  UpdatePatientRecord,
+} from "../../domain/entities/patient-record.entity";
 import { EncryptedValue } from "../../domain/value-objects/encrypted-value";
 import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
 import { RegistrationLinkStatus } from "../../domain/value-objects/registration-link-status";
@@ -208,6 +214,57 @@ class InMemoryPatientIdentityRepository extends PatientIdentityRepository {
   }
 }
 
+class InMemoryPatientRecordRepository extends PatientRecordRepository {
+  readonly byIdentity = new Map<string, PatientRecord>();
+  private nextId = 1;
+
+  async findByPatientIdentity(
+    patientIdentityId: HashedRsaId,
+  ): Promise<PatientRecord | null> {
+    return this.byIdentity.get(patientIdentityId.toString()) ?? null;
+  }
+
+  async ensureFromIdentity(draft: DraftPatientRecord): Promise<PatientRecord> {
+    const k = draft.patientIdentityId.toString();
+    const existing = this.byIdentity.get(k);
+    if (existing) {
+      return existing;
+    }
+    const created = new PatientRecord(
+      `patient-record-${this.nextId++}`,
+      draft.patientIdentityId,
+      draft.email,
+      draft.phoneNumber,
+      undefined,
+      new Date(0),
+    );
+    this.byIdentity.set(k, created);
+    return created;
+  }
+
+  async update(
+    patientIdentityId: HashedRsaId,
+    update: UpdatePatientRecord,
+  ): Promise<PatientRecord> {
+    const k = patientIdentityId.toString();
+    const existing = this.byIdentity.get(k);
+    if (!existing) {
+      throw new Error("Patient record not found");
+    }
+    const c = update.contact;
+    const next = new PatientRecord(
+      existing.id,
+      existing.patientIdentityId,
+      EncryptedValue.fromPersisted(`t:${c.email}`),
+      EncryptedValue.fromPersisted(`t:${c.phoneNumber}`),
+      EncryptedValue.fromPersisted(`t:${c.residentialAddress}`),
+      new Date(1),
+    );
+    this.byIdentity.set(k, next);
+    return next;
+  }
+}
+
 class InMemoryPracticeRepository extends PracticeRepository {
   readonly practices = new Map<string, Practice>();
 
@@ -367,6 +424,7 @@ describe("RegistrationService", () => {
   let registrationRequests: InMemoryRegistrationRequestRepository;
   let registrationLinks: InMemoryRegistrationLinkRepository;
   let patientIdentities: InMemoryPatientIdentityRepository;
+  let patientRecords: InMemoryPatientRecordRepository;
   let practices: InMemoryPracticeRepository;
   let notifier: SpyNotifier;
   let tokenSigner: FakeRegistrationLinkTokenSigner;
@@ -383,6 +441,7 @@ describe("RegistrationService", () => {
     patientIdentities = new InMemoryPatientIdentityRepository(
       new Set([hashedRsaId]),
     );
+    patientRecords = new InMemoryPatientRecordRepository();
     practices = new InMemoryPracticeRepository();
     practices.practices.set("practice-1", Practice.create("practice-1", "GP"));
     patientPractices = new InMemoryPatientPracticeRepository();
@@ -399,6 +458,7 @@ describe("RegistrationService", () => {
       registrationRequests,
       registrationLinks,
       patientIdentities,
+      patientRecords,
       practices,
       patientPractices,
       registrationDocuments,
@@ -408,7 +468,6 @@ describe("RegistrationService", () => {
       tokenSigner,
       sessionSigner,
       new FakeRegistrationLinkFormatter(),
-      protectedPatientSession,
     );
   });
 
@@ -450,6 +509,7 @@ describe("RegistrationService", () => {
       registrationRequests,
       registrationLinks,
       patientIdentities,
+      patientRecords,
       practices,
       patientPractices,
       registrationDocuments,
@@ -459,7 +519,6 @@ describe("RegistrationService", () => {
       tokenSigner,
       sessionSigner,
       new FakeRegistrationLinkFormatter(),
-      protectedPatientSession,
     );
 
     await expect(
@@ -500,6 +559,18 @@ describe("RegistrationService", () => {
     request.submit(patientIdentityId);
     registrationRequests.requests.set(request.id, request);
 
+    await registrationDocuments.create(
+      new DraftRegistrationDocument(
+        request.id,
+        patientIdentityId,
+        ContactDetails.create({
+          email: "doc@example.com",
+          phoneNumber: "0821111111",
+          residentialAddress: "1 Test St",
+        }),
+      ),
+    );
+
     const result = await service.approveRegistration({
       registrationRequestId: request.id,
       approvedByStaffId: "staff-1",
@@ -519,6 +590,15 @@ describe("RegistrationService", () => {
     const [link] = patientPractices.byPair.values();
     expect(link.patientIdentityId.toString()).toBe(hashedRsaId);
     expect(link.practiceId).toBe("practice-1");
+
+    const rec = await patientRecords.findByPatientIdentity(patientIdentityId);
+    await expect(rec?.email?.decrypt(encrypter)).resolves.toBe("doc@example.com");
+    await expect(rec?.phoneNumber?.decrypt(encrypter)).resolves.toBe(
+      "0821111111",
+    );
+    await expect(rec?.residentialAddress?.decrypt(encrypter)).resolves.toBe(
+      "1 Test St",
+    );
   });
 
   it("creates a practice with a trimmed name", async () => {
@@ -708,11 +788,22 @@ describe("RegistrationService", () => {
 
   it("getPatientDetailsForSession: returns decrypted contact details", async () => {
     placeRegistrationLink("prof-link");
+    const verifyResult = await service.verifyRegistration({
+      registrationLinkId: "prof-link",
+      rsaId: rawRsaId,
+    });
+    if (!verifyResult.success) {
+      throw new Error("expected verify success");
+    }
     const patientSession = await protectedPatientSession.verify(
       "sess:prof-link",
     );
     const details = await service.getPatientDetailsForSession(patientSession);
-    expect(details).toEqual({ email: "patient@example.com" });
+    expect(details).toEqual({
+      email: "patient@example.com",
+      phone: undefined,
+      residentialAddress: undefined,
+    });
   });
 
   it("getPatientDetailsForSession: throws when patient identity is missing", async () => {
@@ -966,6 +1057,12 @@ describe("RegistrationService", () => {
     expect(r.registrationLinkId).toBe("ok1");
     const link = (await registrationLinks.findById("ok1"))!;
     expect(link.getStatus().toString()).toBe("REVOKED");
+    const pr = await patientRecords.findByPatientIdentity(
+      HashedRsaId.fromPersisted(hashedRsaId),
+    );
+    await expect(pr?.email?.decrypt(encrypter)).resolves.toBe(
+      "patient@example.com",
+    );
   });
 
   it("verifyRegistration: allows success after two failed mismatches when the ID is then correct", async () => {

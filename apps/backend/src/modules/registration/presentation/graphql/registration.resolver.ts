@@ -120,6 +120,7 @@ export class RegistrationResolver {
     return {
       email: d.email ?? null,
       phone: d.phone ?? null,
+      residentialAddress: d.residentialAddress ?? null,
     };
   }
 

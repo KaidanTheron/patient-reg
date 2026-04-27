@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { Practice } from "../../domain/entities/practice.entity";
 import { PatientIdentityRepository } from "../../domain/ports/patient-identity.repository";
+import { PatientRecordRepository } from "../../domain/ports/patient-record.repository";
 import { PracticeRepository } from "../../domain/ports/practice.repository";
 import { RegistrationRequestRepository } from "../../domain/ports/registration-request.repository";
 import { Notifier } from "../../domain/ports/notifier";
@@ -34,6 +35,10 @@ import {
   UpdateRegistrationDocument,
 } from "../../domain/entities/registration-document.entity";
 import { ContactDetails } from "../../domain/value-objects/contact-details";
+import {
+  DraftPatientRecord,
+  UpdatePatientRecord,
+} from "../../domain/entities/patient-record.entity";
 import {
   ProtectedPatientSession,
   type VerifiedPatientSession,
@@ -130,10 +135,11 @@ export type VerifyRegistrationResult =
       attemptsAfterFailure?: number;
     };
 
-/** Decrypted contact fields for the session’s patient; raw RSA is not stored on {@link PatientIdentity}. */
+/** Decrypted profile fields for the session’s patient; sourced from the canonical patient record. */
 export type PatientSessionDetails = {
   email?: string;
   phone?: string;
+  residentialAddress?: string;
 };
 
 @Injectable()
@@ -142,6 +148,7 @@ export class RegistrationService {
     private readonly registrationRequests: RegistrationRequestRepository,
     private readonly registrationLinks: RegistrationLinkRepository,
     private readonly patientIdentities: PatientIdentityRepository,
+    private readonly patientRecords: PatientRecordRepository,
     private readonly practices: PracticeRepository,
     private readonly patientPractices: PatientPracticeRepository,
     private readonly registrationDocuments: RegistrationDocumentRepository,
@@ -151,7 +158,6 @@ export class RegistrationService {
     private readonly registrationLinkTokenSigner: RegistrationLinkTokenSigner,
     private readonly patientSessionTokenSigner: PatientSessionTokenSigner,
     private readonly registrationLinkFormatter: RegistrationLinkFormatter,
-    private readonly protectedPatientSession: ProtectedPatientSession,
   ) {}
 
   // updates registration request status, updates patient record and links patient and practice
@@ -173,6 +179,42 @@ export class RegistrationService {
       new UpdateRegistrationRequest(
         request.getStatus(),
         request.getRejectionReason() ?? null,
+      ),
+    );
+
+    const document = await this.registrationDocuments.findByRegistrationRequestId(
+      request.id,
+    );
+    if (!document) {
+      throw new Error("Registration has no submitted document to approve");
+    }
+
+    const existingRecord = await this.patientRecords.findByPatientIdentity(
+      request.patientIdentityId,
+    );
+    if (!existingRecord) {
+      const identity = await this.patientIdentities.findById(
+        request.patientIdentityId,
+      );
+      if (!identity) {
+        throw new Error("Patient identity not found for this registration");
+      }
+
+      const { email, phone } = identity;
+
+      await this.patientRecords.ensureFromIdentity(
+        new DraftPatientRecord(request.patientIdentityId, email, phone),
+      );
+    }
+
+    await this.patientRecords.update(
+      request.patientIdentityId,
+      new UpdatePatientRecord(
+        ContactDetails.fromPlain({
+          email: document.contactDetails.email,
+          phoneNumber: document.contactDetails.phoneNumber,
+          residentialAddress: document.contactDetails.residentialAddress,
+        }),
       ),
     );
 
@@ -513,6 +555,15 @@ export class RegistrationService {
       new UpdateRegistrationLink(link.getStatus(), link.getAttempts()),
     );
 
+    const patientIdentity = await this.patientIdentities.findById(hashed);
+    if (patientIdentity) {
+        const { email, phone } = patientIdentity;
+
+      await this.patientRecords.ensureFromIdentity(
+        new DraftPatientRecord(hashed, email, phone),
+      );
+    }
+
     const sessionExpires = new Date(Date.now() + PATIENT_SESSION_TTL_MS);
     const sessionToken = this.patientSessionTokenSigner.sign({
       registrationLinkId: link.id,
@@ -534,25 +585,23 @@ export class RegistrationService {
   async getPatientDetailsForSession(
     patientSession: VerifiedPatientSession,
   ): Promise<PatientSessionDetails> {
-    const patient = await this.patientIdentities.findById(
+    const record = await this.patientRecords.findByPatientIdentity(
       patientSession.patientIdentityId,
     );
-    if (!patient) {
+    if (!record) {
       throw new Error("Patient not found");
     }
 
-    const [email, phone] = await Promise.all([
-      patient.email
-        ? patient.email.decrypt(this.encrypter)
-        : Promise.resolve(undefined as string | undefined),
-      patient.phone
-        ? patient.phone.decrypt(this.encrypter)
-        : Promise.resolve(undefined as string | undefined),
-    ]);
+    const [email, phone, residentialAddress] = await Promise.all([
+        record.email?.decrypt(this.encrypter),
+        record.phoneNumber?.decrypt(this.encrypter),
+        record.residentialAddress?.decrypt(this.encrypter),
+    ])
 
     return {
-      ...(email !== undefined ? { email } : {}),
-      ...(phone !== undefined ? { phone } : {}),
+        email,
+        phone,
+        residentialAddress,
     };
   }
 

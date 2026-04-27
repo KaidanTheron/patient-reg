@@ -83,6 +83,9 @@ export class PatientProfilePayload {
 
   @Field(() => String, { nullable: true })
   phone?: string | null;
+
+  @Field(() => String, { nullable: true })
+  residentialAddress?: string | null;
 }
 
 @ObjectType()

@@ -28,6 +28,7 @@ type Mutation {
 type PatientProfilePayload {
   email: String
   phone: String
+  residentialAddress: String
 }
 
 type PracticePayload {
