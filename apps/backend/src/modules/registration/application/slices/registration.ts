@@ -15,13 +15,9 @@ import {
 import {
   DraftRegistrationLink,
   UpdateRegistrationLink,
+  VerifyLinkOutcome,
 } from "~/modules/registration/domain/entities/registration-link.entity";
-import { RegistrationLinkStatus } from "~/modules/registration/domain/value-objects/registration-link-status";
 import { PatientSessionTokenSigner } from "~/modules/registration/domain/ports/patient-session-token.signer";
-import {
-  MAX_ATTEMPTS,
-  PATIENT_SESSION_TTL_MS,
-} from "~/modules/registration/domain/constants/registration-link.constants";
 import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 import { RsaIdNumber } from "~/modules/registration/domain/value-objects/rsaid";
 import { Hasher } from "~/modules/registration/domain/ports/hasher";
@@ -48,8 +44,7 @@ import {
   MedicalHistory,
   PersonalInformation,
 } from "~/modules/registration/domain/value-objects";
-import { DecryptedPatientProfile } from "~/modules/registration/domain/entities/patient-profile.helpers";
-import { NonFunctionProperties } from "~/common/typing";
+import { MAX_ATTEMPTS } from "../../domain/constants/registration-link.constants";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -206,7 +201,6 @@ export type VerifyRegistrationErrorCode =
   | "LINK_REVOKED"
   | "IDENTITY_MISMATCH"
   | "ATTEMPTS_EXHAUSTED"
-  | "INVALID_STATE"
   | "INVALID_LINK_TOKEN";
 
 export type VerifyRegistrationResult =
@@ -638,63 +632,29 @@ export class RegistrationService {
         maxAttempts: MAX_ATTEMPTS,
       };
     }
-    if (link.getStatus().equals(RegistrationLinkStatus.revoked())) {
-      return {
-        success: false,
-        errorCode: "LINK_REVOKED",
-        maxAttempts: link.maxAttempts,
-      };
-    }
-    if (link.isExpired()) {
-      return {
-        success: false,
-        errorCode: "EXPIRED",
-        maxAttempts: link.maxAttempts,
-      };
-    }
 
     const identity = RsaIdNumber.create(command.rsaId);
     const hashed = await HashedRsaId.create(identity, this.hasher);
 
-    if (!link.patient.equals(hashed)) {
-      link.recordFailedIdentityVerification();
-      await this.registrationLinks.update(
-        link.id,
-        new UpdateRegistrationLink(link.getStatus(), link.getAttempts()),
-      );
-      const justExhausted =
-        link.getStatus().equals(RegistrationLinkStatus.revoked()) &&
-        link.getAttempts() >= link.maxAttempts;
+    const outcome: VerifyLinkOutcome = link.verify(hashed);
+
+    if (!outcome.success) {
+      if (
+        outcome.errorCode === "IDENTITY_MISMATCH" ||
+        outcome.errorCode === "ATTEMPTS_EXHAUSTED"
+      ) {
+        await this.registrationLinks.update(
+          link.id,
+          new UpdateRegistrationLink(link.getStatus(), link.getAttempts()),
+        );
+      }
       return {
         success: false,
-        errorCode: justExhausted ? "ATTEMPTS_EXHAUSTED" : "IDENTITY_MISMATCH",
+        errorCode: outcome.errorCode,
         maxAttempts: link.maxAttempts,
-        attemptsAfterFailure: link.getAttempts(),
+        attemptsAfterFailure: outcome.attemptsAfterFailure,
       };
     }
-
-    if (!link.canBeUsed(hashed)) {
-      return {
-        success: false,
-        errorCode: "INVALID_STATE",
-        maxAttempts: link.maxAttempts,
-      };
-    }
-
-    try {
-      link.consume(hashed);
-    } catch {
-      return {
-        success: false,
-        errorCode: "INVALID_STATE",
-        maxAttempts: link.maxAttempts,
-      };
-    }
-
-    await this.registrationLinks.update(
-      link.id,
-      new UpdateRegistrationLink(link.getStatus(), link.getAttempts()),
-    );
 
     const patientIdentity = await this.patientIdentities.findById(hashed);
     if (patientIdentity) {
@@ -711,16 +671,15 @@ export class RegistrationService {
       );
     }
 
-    const sessionExpires = new Date(Date.now() + PATIENT_SESSION_TTL_MS);
     const sessionToken = this.patientSessionTokenSigner.sign({
       registrationLinkId: link.id,
-      expiresAt: sessionExpires,
+      expiresAt: link.expiresAt,
     });
 
     return {
       success: true,
       sessionToken,
-      expiresAt: sessionExpires.toISOString(),
+      expiresAt: link.expiresAt.toISOString(),
       registrationLinkId: link.id,
     };
   }

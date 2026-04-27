@@ -2,11 +2,18 @@ import {
   HashedRsaId,
   RegistrationLinkStatus
 } from "~/modules/registration/domain/value-objects";
-import { RegistrationLinkPolicy } from "~/modules/registration/domain/policies/registration-link.policy";
 import {
   MAX_ATTEMPTS,
   REGISTRATION_LINK_TTL_MS,
 } from "~/modules/registration/domain/constants/registration-link.constants";
+
+export type VerifyLinkOutcome =
+  | { success: true }
+  | {
+      success: false;
+      errorCode: "LINK_REVOKED" | "EXPIRED" | "IDENTITY_MISMATCH" | "ATTEMPTS_EXHAUSTED";
+      attemptsAfterFailure?: number;
+    };
 
 export class DraftRegistrationLink {
   private status: RegistrationLinkStatus;
@@ -68,18 +75,6 @@ export class RegistrationLink {
     return this.expiresAt.getTime() <= now.getTime();
   }
 
-  public canBeUsed(usedBy: HashedRsaId, now = new Date()): boolean {
-    return RegistrationLinkPolicy.canUse({
-      status: this.status,
-      expiresAt: this.expiresAt,
-      now,
-      current: this.patient,
-      target: usedBy,
-      attempts: this.attempts,
-      maxAttempts: this.maxAttempts,
-    });
-  }
-
   public getAttempts(): number {
     return this.attempts;
   }
@@ -109,11 +104,32 @@ export class RegistrationLink {
     }
   }
 
-  public consume(consumedBy: HashedRsaId, now = new Date()): void {
-    if (!this.canBeUsed(consumedBy, now)) {
-      throw new Error("Registration link is no longer valid");
+  /**
+   * Verifies the claimed patient identity against this link.
+   *
+   * On a successful match, the link is intentionally NOT revoked — expiry
+   * is the sole gate against re-use, allowing the same session URL to be
+   * opened multiple times within the TTL.
+   *
+   * On an identity mismatch, the attempt counter is incremented. Once
+   * {@link maxAttempts} is reached the link is revoked to prevent brute-force.
+   */
+  public verify(claimedPatient: HashedRsaId, now = new Date()): VerifyLinkOutcome {
+    if (this.getStatus().equals(RegistrationLinkStatus.revoked())) {
+      return { success: false, errorCode: "LINK_REVOKED" };
     }
-
-    this.revoke();
+    if (this.isExpired(now)) {
+      return { success: false, errorCode: "EXPIRED" };
+    }
+    if (!this.patient.equals(claimedPatient)) {
+      this.recordFailedIdentityVerification(now);
+      const exhausted = this.getStatus().equals(RegistrationLinkStatus.revoked());
+      return {
+        success: false,
+        errorCode: exhausted ? "ATTEMPTS_EXHAUSTED" : "IDENTITY_MISMATCH",
+        attemptsAfterFailure: this.getAttempts(),
+      };
+    }
+    return { success: true };
   }
 }
