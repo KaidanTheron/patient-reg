@@ -46,10 +46,8 @@ import { IsoDate } from "~/modules/registration/domain/value-objects/iso-date";
 import {
   ContactDetails,
   Gender,
-  GenderValue,
   MedicalAidDetails,
   MedicalAidScheme,
-  MedicalAidSchemeValue,
   MedicalHistory,
   PersonalInformation,
 } from "~/modules/registration/domain/value-objects";
@@ -111,10 +109,10 @@ export type SubmitRegistrationDocumentCommand = {
     lastname?: string;
     /** ISO date `YYYY-MM-DD` (e.g. from `dateOfBirthFromRsaId` or manual entry). */
     dateOfBirth?: string;
-    gender?: GenderValue;
+    gender?: string;
   };
   medicalAidDetails: {
-    scheme?: MedicalAidSchemeValue;
+    scheme?: string;
     memberNumber?: string;
     mainMember?: string;
     mainMemberId?: string;

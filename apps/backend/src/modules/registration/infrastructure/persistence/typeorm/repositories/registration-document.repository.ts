@@ -66,7 +66,7 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
     });
     return this.toDomain(
       await this.repo.findOneOrFail({
-        where: { id: saved.id as string },
+        where: { id: saved.id },
         relations: TypeOrmRegistrationDocumentRepository.relations,
       }),
     );

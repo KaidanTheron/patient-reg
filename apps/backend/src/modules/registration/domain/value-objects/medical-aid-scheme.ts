@@ -16,8 +16,11 @@ export type MedicalAidSchemeValue = (typeof medicalAidSchemeValues)[number];
 export class MedicalAidScheme {
 	private constructor(public readonly value: MedicalAidSchemeValue) {}
 
-	static create(value: MedicalAidSchemeValue): MedicalAidScheme {
-		return new MedicalAidScheme(value);
+	static create(value: string): MedicalAidScheme {
+		if (!medicalAidSchemeValues.includes(value as MedicalAidSchemeValue)) {
+			throw new Error(`Unknown medical aid scheme: ${value}`);
+		}
+		return new MedicalAidScheme(value as MedicalAidSchemeValue);
 	}
 
 	static fromPersisted(value: string): MedicalAidScheme {
