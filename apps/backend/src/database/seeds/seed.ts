@@ -17,22 +17,26 @@ async function main(): Promise<void> {
     let skippedCount = 0;
 
     for (const identity of identities) {
-      const hashedIdentity = await hasher.hash(identity.identity);
-      const encryptedPhone = await encrypter.encrypt(identity.phone!);
-      const encryptedEmail = await encrypter.encrypt(identity.email!);
-      const encryptedFullName = await encrypter.encrypt(identity.fullName!);
+      const [hIdentity, ePhone, eEmail, eFirstname, eLastname] = await Promise.all([
+        hasher.hash(identity.identity),
+        encrypter.encrypt(identity.phone!),
+        encrypter.encrypt(identity.email!),
+        encrypter.encrypt(identity.firstname!),
+        encrypter.encrypt(identity.lastname!),
+      ])
       const already = await patientIdentities.exists({
-        where: { identity: hashedIdentity },
+        where: { identity: hIdentity },
       });
       if (already) {
         skippedCount += 1;
         continue;
       }
       await patientIdentities.insert({
-        identity: hashedIdentity,
-        email: encryptedEmail,
-        phone: encryptedPhone,
-        fullName: encryptedFullName,
+        identity: hIdentity,
+        email: eEmail,
+        phone: ePhone,
+        firstname: eFirstname,
+        lastname: eLastname,
       });
       insertedCount += 1;
     }

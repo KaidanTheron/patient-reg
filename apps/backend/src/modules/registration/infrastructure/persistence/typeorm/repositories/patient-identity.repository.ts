@@ -37,8 +37,11 @@ export class PatientIdentityRepository extends Repository {
       HashedRsaId.fromPersisted(entity.identity),
       entity.email ? EncryptedValue.fromPersisted(entity.email) : undefined,
       entity.phone ? EncryptedValue.fromPersisted(entity.phone) : undefined,
-      entity.fullName
-        ? EncryptedValue.fromPersisted(entity.fullName)
+      entity.firstname
+        ? EncryptedValue.fromPersisted(entity.firstname)
+        : undefined,
+      entity.lastname
+        ? EncryptedValue.fromPersisted(entity.lastname)
         : undefined,
     );
   }

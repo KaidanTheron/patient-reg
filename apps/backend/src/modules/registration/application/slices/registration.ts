@@ -175,7 +175,8 @@ export type SubmittedDocumentDetails = PatientProfile & { submittedAt: Date };
 
 /** Decrypted fields from the patient identity row. */
 export type PatientIdentityDetails = {
-  fullName?: string | null;
+  firstname?: string | null;
+  lastname?: string | null;
   email?: string | null;
   phone?: string | null;
 };
@@ -658,13 +659,13 @@ export class RegistrationService {
 
     const patientIdentity = await this.patientIdentities.findById(hashed);
     if (patientIdentity) {
-      const { email, phone } = patientIdentity;
+      const { email, phone, firstname, lastname } = patientIdentity;
 
       await this.patientRecords.ensureFromIdentity(
         new DraftPatientRecord(
           hashed,
           ContactDetails.create({ email, phone }),
-          PersonalInformation.create({}),
+          PersonalInformation.create({ firstname, lastname }),
           MedicalAidDetails.create({}),
           MedicalHistory.create({}),
         ),
@@ -814,12 +815,13 @@ export class RegistrationService {
 
     let patient: PatientIdentityDetails | null = null;
     if (identity) {
-      const [fullName, email, phone] = await Promise.all([
-        identity.fullName?.decrypt(this.encrypter),
+      const [firstname, lastname, email, phone] = await Promise.all([
+        identity.firstname?.decrypt(this.encrypter),
+        identity.lastname?.decrypt(this.encrypter),
         identity.email?.decrypt(this.encrypter),
         identity.phone?.decrypt(this.encrypter),
       ]);
-      patient = { fullName, email, phone };
+      patient = { firstname, lastname, email, phone };
     }
 
     const document = doc ? await doc.decrypt(this.encrypter) : null;

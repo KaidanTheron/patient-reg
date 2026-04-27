@@ -5,13 +5,15 @@ export const identities: readonly Omit<PatientIdentityEntity, "id">[] = [
     email: "notreal@notreal.com",
     identity: "0501018431087",
     phone: "+27825550199",
-    fullName: "Johan de Wet",
+    firstname: "Johan",
+    lastname: "de Wet"
   },
   {
     email: "old.email@example.com",
     identity: "9001015009086",
     phone: "+27821234567",
-    fullName: "Emily Jacobs",
+    firstname: "Emily",
+    lastname: "Jacobs"
   },
 ];
 
