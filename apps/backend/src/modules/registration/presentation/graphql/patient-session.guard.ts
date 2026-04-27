@@ -6,7 +6,8 @@ import {
 } from "@nestjs/common";
 import { GqlExecutionContext } from "@nestjs/graphql";
 import { ProtectedPatientSession } from "../../application/support/protected-patient-session";
-import type { RegistrationGraphqlContext } from "./patient-session.context";
+import { extractBearerToken } from "./extract-bearer";
+import type { RegistrationGraphqlContext } from "./session.context";
 
 @Injectable()
 export class PatientSessionGuard implements CanActivate {
@@ -19,7 +20,7 @@ export class PatientSessionGuard implements CanActivate {
       GqlExecutionContext.create(
         context,
       ).getContext<RegistrationGraphqlContext>();
-    const token = this.extractBearerToken(gqlContext.req.headers.authorization);
+    const token = extractBearerToken(gqlContext.req.headers.authorization);
 
     if (!token) {
       throw new UnauthorizedException("Missing patient session token");
@@ -32,18 +33,5 @@ export class PatientSessionGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException("Invalid patient session token");
     }
-  }
-
-  private extractBearerToken(header?: string): string | null {
-    if (!header) {
-      return null;
-    }
-
-    const [scheme, token] = header.split(" ");
-    if (scheme !== "Bearer" || !token) {
-      return null;
-    }
-
-    return token;
   }
 }

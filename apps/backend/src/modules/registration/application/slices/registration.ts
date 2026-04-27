@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { ForbiddenException, Injectable } from "@nestjs/common";
 import { Practice } from "../../domain/entities/practice.entity";
 import { PatientIdentityRepository } from "../../domain/ports/patient-identity.repository";
 import { PatientRecordRepository } from "../../domain/ports/patient-record.repository";
@@ -30,11 +30,11 @@ import { Encrypter } from "../../domain/ports/encrypter";
 import { DraftPatientPractice } from "../../domain/entities/patient-practice.entity";
 import { PatientPracticeRepository } from "../../domain/ports/patient-practice.repository";
 import { RegistrationDocumentRepository } from "../../domain/ports/registration-document.repository";
+import { EncryptedValue } from "../../domain/value-objects/encrypted-value";
 import {
   DraftRegistrationDocument,
   UpdateRegistrationDocument,
 } from "../../domain/entities/registration-document.entity";
-import { ContactDetails } from "../../domain/value-objects/contact-details";
 import {
   DraftPatientRecord,
   UpdatePatientRecord,
@@ -43,6 +43,7 @@ import {
   ProtectedPatientSession,
   type VerifiedPatientSession,
 } from "../support/protected-patient-session";
+import { type VerifiedPracticeSession } from "../support/verified-practice-session";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -54,6 +55,8 @@ export type PracticeResult = {
 };
 
 export type ApproveRegistrationCommand = {
+  /** Set from GraphQL `PracticeSessionGuard` / `@PracticeSession()`. */
+  practiceSession: VerifiedPracticeSession;
   registrationRequestId: string;
   approvedByStaffId: string;
 };
@@ -66,8 +69,9 @@ export type ApproveRegistrationResult = {
 
 export type InitiateRegistrationCommand = {
   patientIdentityId: string;
-  practiceId: string;
   initiatedByStaffId: string;
+  /** Resolves the practice; resolver must align with `InitiateRegistrationInput.practiceId`. */
+  practiceSession: VerifiedPracticeSession;
 };
 
 export type InitiateRegistrationResult = {
@@ -87,6 +91,7 @@ export type DeriveDataCommand = {
 export type SubmitRegistrationDocumentCommand = {
   patientSession: VerifiedPatientSession;
   registrationRequestId: string;
+  fullName: string;
   email: string;
   phoneNumber: string;
   residentialAddress: string;
@@ -103,6 +108,8 @@ export type RegistrationRequestListItem = {
   registrationRequestStatus: string;
   rejectionReason?: string;
   practiceName: string;
+  /** Decrypted from patient identity; absent before first document submit. */
+  patientName?: string | null;
 };
 
 export type VerifyRegistrationCommand = {
@@ -172,6 +179,12 @@ export class RegistrationService {
       throw new Error("Registration request not found");
     }
 
+    if (request.practiceId !== command.practiceSession.practiceId) {
+      throw new ForbiddenException(
+        "Registration request does not belong to this practice",
+      );
+    }
+
     request.approve();
 
     await this.registrationRequests.update(
@@ -200,21 +213,25 @@ export class RegistrationService {
         throw new Error("Patient identity not found for this registration");
       }
 
-      const { email, phone } = identity;
+      const { email, phone, fullName: idFullName } = identity;
 
       await this.patientRecords.ensureFromIdentity(
-        new DraftPatientRecord(request.patientIdentityId, email, phone),
+        new DraftPatientRecord(
+          request.patientIdentityId,
+          email,
+          phone,
+          idFullName,
+        ),
       );
     }
 
     await this.patientRecords.update(
       request.patientIdentityId,
       new UpdatePatientRecord(
-        ContactDetails.fromPlain({
-          email: document.contactDetails.email,
-          phoneNumber: document.contactDetails.phoneNumber,
-          residentialAddress: document.contactDetails.residentialAddress,
-        }),
+        document.email,
+        document.phoneNumber,
+        document.residentialAddress,
+        document.fullName,
       ),
     );
 
@@ -238,11 +255,8 @@ export class RegistrationService {
   async initiateRegistration(
     command: InitiateRegistrationCommand,
   ): Promise<InitiateRegistrationResult> {
-    const {
-      patientIdentityId: rawIdentity,
-      practiceId,
-      initiatedByStaffId,
-    } = command;
+    const { patientIdentityId: rawIdentity, initiatedByStaffId } = command;
+    const practiceId = command.practiceSession.practiceId;
     const identity = RsaIdNumber.create(rawIdentity);
     const hashedIdentity = await HashedRsaId.create(identity, this.hasher);
 
@@ -330,18 +344,24 @@ export class RegistrationService {
   // finds patient-practice links for a practice
   async findLinkedPatients(practiceId: Practice["id"]) {}
 
-  // finds registration requests for a practice
+  /**
+   * Staff-only. Callers must pass a {@link VerifiedPracticeSession} from
+   * {@link PracticeSessionGuard} (e.g. practice bearer token = practice id).
+   */
   async findAllPracticeRegRequests(
-    practiceId: Practice["id"],
+    practiceSession: VerifiedPracticeSession,
   ): Promise<RegistrationRequestListItem[]> {
+    const { practiceId } = practiceSession;
     const practice = await this.practices.findById(practiceId);
     if (!practice) {
       throw new Error("Practice not found.");
     }
     const requests =
       await this.registrationRequests.findAllByPracticeId(practiceId);
-    return requests.map((request) =>
-      this.toRegistrationRequestListItem(request, practice.name),
+    return Promise.all(
+      requests.map((request) =>
+        this.toRegistrationRequestListItemWithIdentity(request, practice.name),
+      ),
     );
   }
 
@@ -360,7 +380,7 @@ export class RegistrationService {
     );
     return Promise.all(
       requests.map(async (request) =>
-        this.toRegistrationRequestListItem(
+        this.toRegistrationRequestListItemWithIdentity(
           request,
           await this.resolvePracticeName(request.practiceId),
         ),
@@ -385,7 +405,7 @@ export class RegistrationService {
       throw new Error("Session is not valid for this registration request");
     }
     const practiceName = await this.resolvePracticeName(request.practiceId);
-    return this.toRegistrationRequestListItem(request, practiceName);
+    return this.toRegistrationRequestListItemWithIdentity(request, practiceName);
   }
 
   /**
@@ -411,11 +431,25 @@ export class RegistrationService {
       throw new Error("Session is not valid for this registration request");
     }
 
-    const contact = ContactDetails.create({
-      email: command.email,
-      phoneNumber: command.phoneNumber,
-      residentialAddress: command.residentialAddress,
-    });
+    const fullNamePlain = command.fullName.trim();
+    const email = command.email.trim();
+    const phoneNumber = command.phoneNumber.trim();
+    const residentialAddress = command.residentialAddress.trim();
+    if (!fullNamePlain) {
+      throw new Error("Full name is required");
+    }
+    if (!email || !phoneNumber || !residentialAddress) {
+      throw new Error(
+        "Email, phone number, and residential address are required",
+      );
+    }
+
+    const [encEmail, encPhone, encAddress, encFullName] = await Promise.all([
+      EncryptedValue.create(email, this.encrypter),
+      EncryptedValue.create(phoneNumber, this.encrypter),
+      EncryptedValue.create(residentialAddress, this.encrypter),
+      EncryptedValue.create(fullNamePlain, this.encrypter),
+    ]);
 
     request.submit(patientIdentityId);
 
@@ -425,14 +459,23 @@ export class RegistrationService {
       const submittedAt = new Date();
       await this.registrationDocuments.update(
         existing.id,
-        new UpdateRegistrationDocument(contact, submittedAt),
+        new UpdateRegistrationDocument(
+          encEmail,
+          encPhone,
+          encAddress,
+          encFullName,
+          submittedAt,
+        ),
       );
     } else {
       await this.registrationDocuments.create(
         new DraftRegistrationDocument(
           request.id,
           request.patientIdentityId,
-          contact,
+          encEmail,
+          encPhone,
+          encAddress,
+          encFullName,
         ),
       );
     }
@@ -557,10 +600,10 @@ export class RegistrationService {
 
     const patientIdentity = await this.patientIdentities.findById(hashed);
     if (patientIdentity) {
-        const { email, phone } = patientIdentity;
+      const { email, phone, fullName } = patientIdentity;
 
       await this.patientRecords.ensureFromIdentity(
-        new DraftPatientRecord(hashed, email, phone),
+        new DraftPatientRecord(hashed, email, phone, fullName),
       );
     }
 
@@ -625,6 +668,7 @@ export class RegistrationService {
   private toRegistrationRequestListItem(
     request: RegistrationRequest,
     practiceName: string,
+    patientName?: string | null,
   ): RegistrationRequestListItem {
     const rejectionReason = request.getRejectionReason();
     return {
@@ -632,6 +676,25 @@ export class RegistrationService {
       registrationRequestStatus: request.getStatus().toString(),
       practiceName,
       rejectionReason,
+      patientName: patientName ?? null,
     };
+  }
+
+  private async toRegistrationRequestListItemWithIdentity(
+    request: RegistrationRequest,
+    practiceName: string,
+  ): Promise<RegistrationRequestListItem> {
+    const identity = await this.patientIdentities.findById(
+      request.patientIdentityId,
+    );
+    let patientName: string | null = null;
+    if (identity?.fullName) {
+      patientName = (await identity.fullName.decrypt(this.encrypter)) ?? null;
+    }
+    return this.toRegistrationRequestListItem(
+      request,
+      practiceName,
+      patientName,
+    );
   }
 }

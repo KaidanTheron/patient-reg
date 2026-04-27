@@ -37,10 +37,12 @@ export class TypeOrmPatientRecordRepository extends Port {
       email,
       identity,
       phone,
+      fullName,
     } = {
       identity: draft.patientIdentityId.toString(),
       email: draft.email?.toPersisted(),
       phone: draft.phoneNumber?.toPersisted(),
+      fullName: draft.fullName?.toPersisted(),
     };
 
     const existing = await this.repo.findOne({
@@ -56,6 +58,7 @@ export class TypeOrmPatientRecordRepository extends Port {
       email: email ?? null,
       phoneNumber: phone ?? null,
       residentialAddress: null,
+      fullName: fullName ?? null,
     });
 
     const loaded = await this.repo.findOneOrFail({
@@ -77,21 +80,15 @@ export class TypeOrmPatientRecordRepository extends Port {
       throw new Error("Patient record not found");
     }
 
-    const { email, phoneNumber, residentialAddress } = update.contact;
-    const [e, p, a] = await Promise.all([
-      EncryptedValue.create(email, this.encrypter),
-      EncryptedValue.create(phoneNumber, this.encrypter),
-      EncryptedValue.create(residentialAddress, this.encrypter),
-    ]);
+    const payload = {
+      email: update.email?.toPersisted() ?? null,
+      phoneNumber: update.phoneNumber?.toPersisted() ?? null,
+      residentialAddress: update.residentialAddress?.toPersisted() ?? null,
+      fullName: update.fullName?.toPersisted() ?? null,
+    };
 
-    await this.repo.update(
-      { id: entity.id },
-      {
-        email: e.toPersisted(),
-        phoneNumber: p.toPersisted(),
-        residentialAddress: a.toPersisted(),
-      },
-    );
+    await this.repo.update({ id: entity.id }, payload);
+
     const reloaded = await this.repo.findOneOrFail({
       where: { id: entity.id },
       relations: { patientIdentity: true },
@@ -99,7 +96,27 @@ export class TypeOrmPatientRecordRepository extends Port {
     return this.toDomain(reloaded);
   }
 
-  private async toDomain(entity: PatientRecordEntity): Promise<PatientRecord> {
+  async updateFullName(
+    patientIdentityId: HashedRsaId,
+    fullName: string,
+  ): Promise<void> {
+    const entity = await this.repo.findOne({
+      where: { patientIdentity: { identity: patientIdentityId.toString() } },
+    });
+    if (!entity) {
+      return;
+    }
+    const encrypted = await EncryptedValue.create(
+      fullName,
+      this.encrypter,
+    );
+    await this.repo.update(
+      { id: entity.id },
+      { fullName: encrypted.toPersisted() },
+    );
+  }
+
+  private toDomain(entity: PatientRecordEntity): PatientRecord {
     if (!entity.patientIdentity) {
       throw new Error("Patient record is missing patient identity relation");
     }
@@ -110,6 +127,7 @@ export class TypeOrmPatientRecordRepository extends Port {
       patientIdentity,
       phoneNumber,
       residentialAddress,
+      fullName,
       updatedAt,
     } = entity;
 
@@ -119,6 +137,7 @@ export class TypeOrmPatientRecordRepository extends Port {
       email ? EncryptedValue.fromPersisted(email) : undefined,
       phoneNumber ? EncryptedValue.fromPersisted(phoneNumber) : undefined,
       residentialAddress ? EncryptedValue.fromPersisted(residentialAddress): undefined,
+      fullName ? EncryptedValue.fromPersisted(fullName) : undefined,
       updatedAt,
     );
   }

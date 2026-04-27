@@ -41,11 +41,12 @@ type Query {
   myRegistrationRequest(id: String!): RegistrationRequestPayload!
   myRegistrationRequests: [RegistrationRequestPayload!]!
   practice(id: String!): PracticePayload
-  practiceRegistrationRequests(practiceId: String!): [RegistrationRequestPayload!]!
+  practiceRegistrationRequests: [RegistrationRequestPayload!]!
   practices: [PracticePayload!]!
 }
 
 type RegistrationRequestPayload {
+  patientName: String
   practiceName: String!
   registrationRequestId: String!
   registrationRequestStatus: String!
@@ -54,6 +55,7 @@ type RegistrationRequestPayload {
 
 input SubmitRegistrationDocumentInput {
   email: String!
+  fullName: String!
   phoneNumber: String!
   registrationRequestId: String!
   residentialAddress: String!

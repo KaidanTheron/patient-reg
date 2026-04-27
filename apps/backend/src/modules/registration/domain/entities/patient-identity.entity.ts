@@ -6,5 +6,6 @@ export class PatientIdentity {
         public readonly identity: HashedRsaId,
         public readonly email?: EncryptedValue,
         public readonly phone?: EncryptedValue,
+        public readonly fullName?: EncryptedValue,
     ) {}
 }

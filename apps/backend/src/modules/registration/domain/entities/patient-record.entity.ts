@@ -1,5 +1,4 @@
 import { HashedRsaId } from "../value-objects/hashed-rsaid";
-import { ContactDetails } from "../value-objects/contact-details";
 import { EncryptedValue } from "../value-objects/encrypted-value";
 
 /**
@@ -12,6 +11,7 @@ export class DraftPatientRecord {
     public readonly patientIdentityId: HashedRsaId,
     public readonly email?: EncryptedValue,
     public readonly phoneNumber?: EncryptedValue,
+    public readonly fullName?: EncryptedValue,
   ) {}
 }
 
@@ -19,7 +19,12 @@ export class DraftPatientRecord {
  * Full contact profile applied to the canonical record on staff approval.
  */
 export class UpdatePatientRecord {
-  constructor(public readonly contact: ContactDetails) {}
+  constructor(
+    public readonly email: EncryptedValue | undefined,
+    public readonly phoneNumber: EncryptedValue | undefined,
+    public readonly residentialAddress: EncryptedValue | undefined,
+    public readonly fullName: EncryptedValue | undefined,
+  ) {}
 }
 
 /**
@@ -33,7 +38,7 @@ export class PatientRecord {
     public readonly email: EncryptedValue | undefined,
     public readonly phoneNumber: EncryptedValue | undefined,
     public readonly residentialAddress: EncryptedValue | undefined,
+    public readonly fullName: EncryptedValue | undefined,
     public readonly updatedAt: Date,
   ) {}
-
 }

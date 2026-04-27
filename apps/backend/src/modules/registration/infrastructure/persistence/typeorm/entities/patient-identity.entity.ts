@@ -17,5 +17,8 @@ export class PatientIdentityEntity {
 
     @Column({ type: "text", nullable: false })
     phone: string | null;
+
+    @Column({ type: "text", nullable: true })
+    fullName: string | null;
 }
   

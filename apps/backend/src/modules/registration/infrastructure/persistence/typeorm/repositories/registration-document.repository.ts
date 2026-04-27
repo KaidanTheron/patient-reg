@@ -9,9 +9,7 @@ import {
   UpdateRegistrationDocument,
 } from "../../../../domain/entities/registration-document.entity";
 import { HashedRsaId } from "../../../../domain/value-objects/hashed-rsaid";
-import { ContactDetails } from "../../../../domain/value-objects/contact-details";
 import { EncryptedValue } from "../../../../domain/value-objects/encrypted-value";
-import { Encrypter } from "../../../../domain/ports/encrypter";
 import { RegistrationDocumentEntity } from "../entities/registration-document.entity";
 
 @Injectable()
@@ -24,7 +22,6 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
   constructor(
     @InjectRepository(RegistrationDocumentEntity)
     private readonly repo: TypeOrmRepository<RegistrationDocumentEntity>,
-    private readonly encrypter: Encrypter,
   ) {
     super();
   }
@@ -32,27 +29,14 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
   async create(
     document: DraftRegistrationDocument,
   ): Promise<RegistrationDocument> {
-    const [email, phone, address] = await Promise.all([
-      EncryptedValue.create(
-        document.contactDetails.email,
-        this.encrypter,
-      ),
-      EncryptedValue.create(
-        document.contactDetails.phoneNumber,
-        this.encrypter,
-      ),
-      EncryptedValue.create(
-        document.contactDetails.residentialAddress,
-        this.encrypter,
-      ),
-    ]);
     const submittedAt = new Date();
     const saved = await this.repo.save({
       registrationRequest: { id: document.registrationRequestId },
       patientIdentity: { identity: document.patientIdentityId.toString() },
-      email: email.toPersisted(),
-      phoneNumber: phone.toPersisted(),
-      residentialAddress: address.toPersisted(),
+      email: document.email.toPersisted(),
+      phoneNumber: document.phoneNumber.toPersisted(),
+      residentialAddress: document.residentialAddress.toPersisted(),
+      fullName: document.fullName.toPersisted(),
       submittedAt,
     });
     return this.toDomain(
@@ -77,26 +61,13 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
     id: string,
     update: UpdateRegistrationDocument,
   ): Promise<RegistrationDocument> {
-    const [email, phone, address] = await Promise.all([
-      EncryptedValue.create(
-        update.contactDetails.email,
-        this.encrypter,
-      ),
-      EncryptedValue.create(
-        update.contactDetails.phoneNumber,
-        this.encrypter,
-      ),
-      EncryptedValue.create(
-        update.contactDetails.residentialAddress,
-        this.encrypter,
-      ),
-    ]);
     await this.repo.update(
       { id },
       {
-        email: email.toPersisted(),
-        phoneNumber: phone.toPersisted(),
-        residentialAddress: address.toPersisted(),
+        email: update.email.toPersisted(),
+        phoneNumber: update.phoneNumber.toPersisted(),
+        residentialAddress: update.residentialAddress.toPersisted(),
+        fullName: update.fullName.toPersisted(),
         submittedAt: update.submittedAt,
       },
     );
@@ -110,28 +81,22 @@ export class TypeOrmRegistrationDocumentRepository extends Port {
     return this.toDomain(entity);
   }
 
-  private async toDomain(
+  private toDomain(
     entity: RegistrationDocumentEntity,
-  ): Promise<RegistrationDocument> {
+  ): RegistrationDocument {
     if (!entity.patientIdentity || !entity.registrationRequest) {
       throw new Error("Registration document is missing relations");
     }
-    const [em, ph, addr] = await Promise.all([
-      EncryptedValue.fromPersisted(entity.email).decrypt(this.encrypter),
-      EncryptedValue.fromPersisted(entity.phoneNumber).decrypt(this.encrypter),
-      EncryptedValue.fromPersisted(
-        entity.residentialAddress,
-      ).decrypt(this.encrypter),
-    ]);
     return new RegistrationDocument(
       entity.id,
       entity.registrationRequest.id,
       HashedRsaId.fromPersisted(entity.patientIdentity.identity),
-      ContactDetails.fromPlain({
-        email: em,
-        phoneNumber: ph,
-        residentialAddress: addr,
-      }),
+      EncryptedValue.fromPersisted(entity.email),
+      EncryptedValue.fromPersisted(entity.phoneNumber),
+      EncryptedValue.fromPersisted(entity.residentialAddress),
+      entity.fullName
+        ? EncryptedValue.fromPersisted(entity.fullName)
+        : undefined,
       entity.submittedAt,
     );
   }

@@ -42,6 +42,9 @@ export class SubmitRegistrationDocumentInput {
   registrationRequestId: string;
 
   @Field()
+  fullName: string;
+
+  @Field()
   email: string;
 
   @Field()
@@ -64,6 +67,9 @@ export class RegistrationRequestPayload {
 
   @Field({ nullable: true })
   rejectionReason?: string;
+
+  @Field(() => String, { nullable: true })
+  patientName?: string | null;
 }
 
 @InputType()

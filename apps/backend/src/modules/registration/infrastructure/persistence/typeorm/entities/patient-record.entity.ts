@@ -18,7 +18,6 @@ export class PatientRecordEntity {
   @JoinColumn({ name: "patientIdentityId", referencedColumnName: "identity" })
   patientIdentity: PatientIdentityEntity;
 
-  /** Encrypted; nullable until supplied by identity (phone-only or email-only). */
   @Column({ type: "text", nullable: true })
   email: string | null;
 
@@ -27,6 +26,9 @@ export class PatientRecordEntity {
 
   @Column({ type: "text", nullable: true })
   residentialAddress: string | null;
+
+  @Column({ type: "text", nullable: true })
+  fullName: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

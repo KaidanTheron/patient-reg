@@ -1,10 +1,10 @@
+import { ForbiddenException } from "@nestjs/common";
 import { Practice } from "../../domain/entities/practice.entity";
 import {
   DraftRegistrationDocument,
   RegistrationDocument,
   UpdateRegistrationDocument,
 } from "../../domain/entities/registration-document.entity";
-import { ContactDetails } from "../../domain/value-objects/contact-details";
 import {
   DraftPatientPractice,
   PatientPractice,
@@ -51,8 +51,8 @@ import { HashedRsaId } from "../../domain/value-objects/hashed-rsaid";
 import { RegistrationLinkStatus } from "../../domain/value-objects/registration-link-status";
 import { RegistrationStatus } from "../../domain/value-objects/registration-status";
 import { ProtectedPatientSession } from "../support/protected-patient-session";
+import { type VerifiedPracticeSession } from "../support/verified-practice-session";
 import { RegistrationService } from "./registration";
-
 class InMemoryRegistrationRequestRepository extends RegistrationRequestRepository {
   readonly requests = new Map<string, RegistrationRequest>();
   readonly updates: Array<{
@@ -195,6 +195,8 @@ class TestEncrypter extends Encrypter {
 }
 
 class InMemoryPatientIdentityRepository extends PatientIdentityRepository {
+  private fullNameByIdentity = new Map<string, EncryptedValue>();
+
   constructor(private readonly validPatients = new Set<string>()) {
     super();
   }
@@ -210,6 +212,15 @@ class InMemoryPatientIdentityRepository extends PatientIdentityRepository {
     return new PatientIdentity(
       HashedRsaId.fromPersisted(identity.toString()),
       EncryptedValue.fromPersisted(TEST_NOTIFIER_RECIPIENT),
+      undefined,
+      this.fullNameByIdentity.get(identity.toString()),
+    );
+  }
+
+  async updateFullName(identity: HashedRsaId, fullName: string): Promise<void> {
+    this.fullNameByIdentity.set(
+      identity.toString(),
+      EncryptedValue.fromPersisted(`t:${fullName}`),
     );
   }
 }
@@ -236,6 +247,7 @@ class InMemoryPatientRecordRepository extends PatientRecordRepository {
       draft.email,
       draft.phoneNumber,
       undefined,
+      draft.fullName,
       new Date(0),
     );
     this.byIdentity.set(k, created);
@@ -251,17 +263,40 @@ class InMemoryPatientRecordRepository extends PatientRecordRepository {
     if (!existing) {
       throw new Error("Patient record not found");
     }
-    const c = update.contact;
     const next = new PatientRecord(
       existing.id,
       existing.patientIdentityId,
-      EncryptedValue.fromPersisted(`t:${c.email}`),
-      EncryptedValue.fromPersisted(`t:${c.phoneNumber}`),
-      EncryptedValue.fromPersisted(`t:${c.residentialAddress}`),
+      update.email ?? existing.email,
+      update.phoneNumber ?? existing.phoneNumber,
+      update.residentialAddress ?? existing.residentialAddress,
+      update.fullName !== undefined
+        ? update.fullName
+        : existing.fullName,
       new Date(1),
     );
     this.byIdentity.set(k, next);
     return next;
+  }
+
+  async updateFullName(
+    patientIdentityId: HashedRsaId,
+    fullName: string,
+  ): Promise<void> {
+    const k = patientIdentityId.toString();
+    const existing = this.byIdentity.get(k);
+    if (!existing) {
+      return;
+    }
+    const next = new PatientRecord(
+      existing.id,
+      existing.patientIdentityId,
+      existing.email,
+      existing.phoneNumber,
+      existing.residentialAddress,
+      EncryptedValue.fromPersisted(`t:${fullName}`),
+      existing.updatedAt,
+    );
+    this.byIdentity.set(k, next);
   }
 }
 
@@ -308,7 +343,10 @@ class InMemoryRegistrationDocumentRepository extends RegistrationDocumentReposit
       id,
       document.registrationRequestId,
       document.patientIdentityId,
-      document.contactDetails,
+      document.email,
+      document.phoneNumber,
+      document.residentialAddress,
+      document.fullName,
       new Date(0),
     );
     this.byId.set(id, created);
@@ -327,7 +365,10 @@ class InMemoryRegistrationDocumentRepository extends RegistrationDocumentReposit
       id,
       existing.registrationRequestId,
       existing.patientIdentityId,
-      update.contactDetails,
+      update.email,
+      update.phoneNumber,
+      update.residentialAddress,
+      update.fullName,
       update.submittedAt,
     );
     this.byId.set(id, next);
@@ -420,6 +461,7 @@ class FakePatientSessionTokenSigner extends PatientSessionTokenSigner {
 describe("RegistrationService", () => {
   const rawRsaId = "9001010000080";
   const hashedRsaId = `hashed:${rawRsaId}`;
+  const staffPractice1: VerifiedPracticeSession = { practiceId: "practice-1" };
 
   let registrationRequests: InMemoryRegistrationRequestRepository;
   let registrationLinks: InMemoryRegistrationLinkRepository;
@@ -474,7 +516,7 @@ describe("RegistrationService", () => {
   it("initiates a registration request, creates a fresh link, and notifies the patient", async () => {
     const result = await service.initiateRegistration({
       patientIdentityId: rawRsaId,
-      practiceId: "practice-1",
+      practiceSession: staffPractice1,
       initiatedByStaffId: "staff-1",
     });
 
@@ -524,7 +566,7 @@ describe("RegistrationService", () => {
     await expect(
       service.initiateRegistration({
         patientIdentityId: rawRsaId,
-        practiceId: "practice-1",
+        practiceSession: staffPractice1,
         initiatedByStaffId: "staff-1",
       }),
     ).rejects.toThrow("Registrant not found.");
@@ -538,7 +580,7 @@ describe("RegistrationService", () => {
     await expect(
       service.initiateRegistration({
         patientIdentityId: rawRsaId,
-        practiceId: "missing-practice",
+        practiceSession: { practiceId: "missing-practice" },
         initiatedByStaffId: "staff-1",
       }),
     ).rejects.toThrow("Practice not found.");
@@ -563,15 +605,15 @@ describe("RegistrationService", () => {
       new DraftRegistrationDocument(
         request.id,
         patientIdentityId,
-        ContactDetails.create({
-          email: "doc@example.com",
-          phoneNumber: "0821111111",
-          residentialAddress: "1 Test St",
-        }),
+        EncryptedValue.fromPersisted("t:doc@example.com"),
+        EncryptedValue.fromPersisted("t:0821111111"),
+        EncryptedValue.fromPersisted("t:1 Test St"),
+        EncryptedValue.fromPersisted("t:Document Person"),
       ),
     );
 
     const result = await service.approveRegistration({
+      practiceSession: staffPractice1,
       registrationRequestId: request.id,
       approvedByStaffId: "staff-1",
     });
@@ -599,6 +641,38 @@ describe("RegistrationService", () => {
     await expect(rec?.residentialAddress?.decrypt(encrypter)).resolves.toBe(
       "1 Test St",
     );
+    await expect(rec?.fullName?.decrypt(encrypter)).resolves.toBe(
+      "Document Person",
+    );
+  });
+
+  it("rejects approval when the request belongs to another practice", async () => {
+    const patientIdentityId = HashedRsaId.fromPersisted(hashedRsaId);
+    const request = new RegistrationRequest(
+      "registration-x",
+      patientIdentityId,
+      "practice-1",
+      RegistrationStatus.awaitingReview(),
+    );
+    registrationRequests.requests.set(request.id, request);
+    await registrationDocuments.create(
+      new DraftRegistrationDocument(
+        request.id,
+        patientIdentityId,
+        EncryptedValue.fromPersisted("t:a@b.c"),
+        EncryptedValue.fromPersisted("t:1"),
+        EncryptedValue.fromPersisted("t:x"),
+        EncryptedValue.fromPersisted("t:X"),
+      ),
+    );
+
+    await expect(
+      service.approveRegistration({
+        practiceSession: { practiceId: "other-practice" },
+        registrationRequestId: request.id,
+        approvedByStaffId: "staff-1",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("creates a practice with a trimmed name", async () => {
@@ -659,7 +733,7 @@ describe("RegistrationService", () => {
       Practice.create("practice-2", "Other"),
     );
 
-    const list = await service.findAllPracticeRegRequests("practice-1");
+    const list = await service.findAllPracticeRegRequests(staffPractice1);
 
     expect(list).toHaveLength(2);
     expect(list[0].registrationRequestId).toBe(newer.id);
@@ -670,11 +744,13 @@ describe("RegistrationService", () => {
     expect(list[1].registrationRequestStatus).toBe("AWAITING_REVIEW");
     expect(list[1].rejectionReason).toBeUndefined();
     expect(list[1].practiceName).toBe("GP");
+    expect(list[0].patientName).toBeNull();
+    expect(list[1].patientName).toBeNull();
   });
 
   it("throws when listing registration requests for an unknown practice", async () => {
     await expect(
-      service.findAllPracticeRegRequests("no-such-practice"),
+      service.findAllPracticeRegRequests({ practiceId: "no-such-practice" }),
     ).rejects.toThrow("Practice not found.");
   });
 
@@ -721,12 +797,14 @@ describe("RegistrationService", () => {
           registrationRequestId: "req-mr-1",
           registrationRequestStatus: "AWAITING_COMPLETION",
           practiceName: "GP",
+          patientName: null,
         }),
         expect.objectContaining({
           registrationRequestId: "req-mr-2",
           registrationRequestStatus: "REJECTED",
           rejectionReason: "bad",
           practiceName: "P2",
+          patientName: null,
         }),
       ]),
     );
@@ -754,6 +832,7 @@ describe("RegistrationService", () => {
       registrationRequestId: "req-single-1",
       registrationRequestStatus: "AWAITING_COMPLETION",
       practiceName: "GP",
+      patientName: null,
     });
   });
 
@@ -862,6 +941,7 @@ describe("RegistrationService", () => {
     const out = await service.submitRegistrationDocument({
       patientSession,
       registrationRequestId: req.id,
+      fullName: "Me Myself",
       email: "me@mail.test",
       phoneNumber: "0820000000",
       residentialAddress: "1 Example Rd",
@@ -874,6 +954,16 @@ describe("RegistrationService", () => {
     });
     expect(req.getStatus().toString()).toBe("AWAITING_REVIEW");
     expect(registrationDocuments.byId.size).toBe(1);
+
+    const list = await service.findAllPracticeRegRequests(staffPractice1);
+    expect(list).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          registrationRequestId: "req-doc-1",
+          patientName: "Me Myself",
+        }),
+      ]),
+    );
   });
 
   it("rejects submission when the registration request is missing", async () => {
@@ -885,6 +975,7 @@ describe("RegistrationService", () => {
       service.submitRegistrationDocument({
         patientSession,
         registrationRequestId: "nonexistent",
+        fullName: "A",
         email: "a@b.c",
         phoneNumber: "1",
         residentialAddress: "a",
@@ -912,11 +1003,10 @@ describe("RegistrationService", () => {
         "doc-1",
         "req-doc-3",
         patient,
-        ContactDetails.create({
-          email: "old@e.test",
-          phoneNumber: "1",
-          residentialAddress: "old",
-        }),
+        EncryptedValue.fromPersisted("t:old@e.test"),
+        EncryptedValue.fromPersisted("t:1"),
+        EncryptedValue.fromPersisted("t:old"),
+        EncryptedValue.fromPersisted("t:Old Name"),
         new Date(0),
       ),
     );
@@ -924,6 +1014,7 @@ describe("RegistrationService", () => {
     await service.submitRegistrationDocument({
       patientSession: resubmitSession,
       registrationRequestId: "req-doc-3",
+      fullName: "New Name",
       email: "new@e.test",
       phoneNumber: "082",
       residentialAddress: "2 New St",
@@ -931,7 +1022,7 @@ describe("RegistrationService", () => {
 
     const doc =
       (await registrationDocuments.findByRegistrationRequestId("req-doc-3"))!;
-    expect(doc.contactDetails.email).toBe("new@e.test");
+    await expect(doc.email.decrypt(encrypter)).resolves.toBe("new@e.test");
     const stored = await registrationRequests.findById("req-doc-3");
     expect(stored?.getStatus().toString()).toBe("AWAITING_REVIEW");
   });
@@ -952,6 +1043,7 @@ describe("RegistrationService", () => {
       service.submitRegistrationDocument({
         patientSession,
         registrationRequestId: req.id,
+        fullName: "A",
         email: "a@b.c",
         phoneNumber: "1",
         residentialAddress: "a",
@@ -977,6 +1069,7 @@ describe("RegistrationService", () => {
       service.submitRegistrationDocument({
         patientSession,
         registrationRequestId: req.id,
+        fullName: "A",
         email: "a@b.c",
         phoneNumber: "1",
         residentialAddress: "a",

@@ -39,6 +39,9 @@ export class PatientIdentityRepository extends Repository {
             entity.phone
                 ? EncryptedValue.fromPersisted(entity.phone)
                 : undefined,
+            entity.fullName
+                ? EncryptedValue.fromPersisted(entity.fullName)
+                : undefined,
         );
     }
 }

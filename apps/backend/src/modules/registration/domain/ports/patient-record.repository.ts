@@ -1,5 +1,4 @@
 import { DraftPatientRecord, PatientRecord, UpdatePatientRecord } from "../entities/patient-record.entity";
-import { HashedRsaId } from "../value-objects/hashed-rsaid";
 
 export abstract class PatientRecordRepository {
   abstract findByPatientIdentity(

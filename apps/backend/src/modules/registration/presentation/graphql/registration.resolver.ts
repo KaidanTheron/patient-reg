@@ -1,9 +1,11 @@
-import { UseGuards } from "@nestjs/common";
+import { ForbiddenException, UseGuards } from "@nestjs/common";
 import { Args, Mutation, Query, Resolver } from "@nestjs/graphql";
 import { RegistrationService } from "../../application/slices/registration";
 import type { VerifiedPatientSession } from "../../application/support/protected-patient-session";
-import { PatientSession } from "./patient-session.context";
+import type { VerifiedPracticeSession } from "../../application/support/verified-practice-session";
+import { PatientSession, PracticeSession } from "./session.context";
 import { PatientSessionGuard } from "./patient-session.guard";
+import { PracticeSessionGuard } from "./practice-session.guard";
 import {
   ApproveRegistrationInput,
   CreatePracticeInput,
@@ -28,21 +30,31 @@ export class RegistrationResolver {
   }
 
   @Mutation(() => RegistrationRequestPayload)
+  @UseGuards(PracticeSessionGuard)
   async initiateRegistration(
     @Args("input") input: InitiateRegistrationInput,
+    @PracticeSession() practiceSession: VerifiedPracticeSession,
   ): Promise<RegistrationRequestPayload> {
+    if (input.practiceId !== practiceSession.practiceId) {
+      throw new ForbiddenException("Practice id does not match session");
+    }
     return this.registration.initiateRegistration({
       patientIdentityId: input.rsaId,
-      practiceId: input.practiceId,
       initiatedByStaffId: input.initiatedByStaffId,
+      practiceSession,
     });
   }
 
   @Mutation(() => RegistrationRequestPayload)
+  @UseGuards(PracticeSessionGuard)
   async approveRegistration(
     @Args("input") input: ApproveRegistrationInput,
+    @PracticeSession() practiceSession: VerifiedPracticeSession,
   ): Promise<RegistrationRequestPayload> {
-    return this.registration.approveRegistration(input);
+    return this.registration.approveRegistration({
+      ...input,
+      practiceSession,
+    });
   }
 
   @Mutation(() => RegistrationRequestPayload)
@@ -54,6 +66,7 @@ export class RegistrationResolver {
     return this.registration.submitRegistrationDocument({
       patientSession,
       registrationRequestId: input.registrationRequestId,
+      fullName: input.fullName,
       email: input.email,
       phoneNumber: input.phoneNumber,
       residentialAddress: input.residentialAddress,
@@ -95,10 +108,11 @@ export class RegistrationResolver {
   }
 
   @Query(() => [RegistrationRequestPayload])
+  @UseGuards(PracticeSessionGuard)
   async practiceRegistrationRequests(
-    @Args("practiceId") practiceId: string,
+    @PracticeSession() practiceSession: VerifiedPracticeSession,
   ): Promise<RegistrationRequestPayload[]> {
-    return this.registration.findAllPracticeRegRequests(practiceId);
+    return this.registration.findAllPracticeRegRequests(practiceSession);
   }
 
   @Query(() => [RegistrationRequestPayload])

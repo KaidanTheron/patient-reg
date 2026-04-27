@@ -33,6 +33,9 @@ export class RegistrationDocumentEntity {
   @Column({ type: "text" })
   residentialAddress: string;
 
+  @Column({ type: "text", nullable: true })
+  fullName: string | null;
+
   @Column({ type: "timestamptz" })
   submittedAt: Date;
 
