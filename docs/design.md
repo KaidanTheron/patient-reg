@@ -30,6 +30,7 @@ The resulting system implemented in this project, which would be part of a large
 3. A registration link is the only way a user can access their registration inbox. This negatively impacts UX, but is a result of the constraint that there is no account creation or login for a user; security is more important than UX. However, if a registration link expires a practice that has a registration request with that patient can resend / generate a new registration link.
 4. For the sake of time, simplicity and focusing on the main domain logic, staff authentication has not been included at all.
 5. Some values like medical aid schemes have been hardcoded, this is for the sake of keeping things simple and time constraints where the effect on the core domain focus isn't significant.
+6. Due to time constraints and scope of this project, many of the registration document values are not validated. Phone, email and other values that could invalid or incorrect are not validated. The only thing that is validated is an input SA id number.
 
 ### Concerns
 
