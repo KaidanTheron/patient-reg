@@ -74,7 +74,10 @@ export class TypeOrmPatientRecordRepository extends Port {
     await this.repo.update(
       { id: entity.id },
       {
-        ...cd,
+        email: cd.email,
+        phoneNumber: cd.phone,
+        altphone: cd.altphone,
+        residentialAddress: cd.address,
         ...pi,
         ...ma,
         ...mh,
