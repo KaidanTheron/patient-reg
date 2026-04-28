@@ -462,12 +462,20 @@ export class RegistrationService {
       this.practices.findById(request.practiceId),
     ]);
 
-    const effects = submitRegistrationDocumentService({
-      request,
-      consent,
-      existingDocument,
-      patientIdentityId,
-    });
+    let effects: ReturnType<typeof submitRegistrationDocumentService>;
+    try {
+      effects = submitRegistrationDocumentService({
+        request,
+        consent,
+        existingDocument,
+        patientIdentityId,
+      });
+    } catch (err) {
+      if (err instanceof Error) {
+        throw new ForbiddenException(err.message);
+      }
+      throw err;
+    }
 
     const { contactDetails: cd, personalInformation: pi } = command;
     const { medicalAidDetails: ma, medicalHistory: mh } = command;
