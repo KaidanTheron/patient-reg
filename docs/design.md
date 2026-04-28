@@ -28,7 +28,8 @@ The resulting system implemented in this project, which would be part of a large
 1. We will store "existing" south african ID's in **PatientReg**'s database instead of having a seperate database. We will assume that any ID number **PatientReg** has, has already been obtained and hashed from the global database of South African IDs. This simplifies the architecture for the purposes of this project at the cost of being less realistic.
 2. We will ignore any existing external patient data and store all patient data inside **PatientReg**'s database. If a record for a patient does not exist in this database, then that patient data does not exist anywhere. Again, this is for the sake of simplicity and comes at the cost of being less accurate in real world scenarios where 9 times of 10 a patient being registered would have some pre-existing data.
 3. A registration link is the only way a user can access their registration inbox. This negatively impacts UX, but is a result of the constraint that there is no account creation or login for a user; security is more important than UX. However, if a registration link expires a practice that has a registration request with that patient can resend / generate a new registration link.
-4. There is a max resend limit within a timeframe for registration links. This a tradeoff made in favour of security and against UX as a result of other constraints.
+4. For the sake of time, simplicity and focusing on the main domain logic, staff authentication has not been included at all.
+5. Some values like medical aid schemes have been hardcoded, this is for the sake of keeping things simple and time constraints where the effect on the core domain focus isn't significant.
 
 ### Concerns
 
@@ -36,10 +37,16 @@ The resulting system implemented in this project, which would be part of a large
 2. Identity verification with just ID number is not foolproof. If someone has access to a registration link and has the "victim's" ID number, they can fill in the registration form on their behalf. While the staff review process does add some level of detail verification and safety, it would be best if there was multi factor authentication, like if an SMS was sent to the phone number associated with the ID number which allows the user to verify their identity.
 3. While registration links do expire to decrease the likelihood of link misuse, the possibility of multiple active links does decrease the effectiveness of any individual link's expiry. This is particularly worsened because a registration link acts as a way to access all registration requests for patient. As with concern #2, if MFA were an option it would significantly decrease the severity of this concern.
 
-### Possible Improvements
+### Possible Improvements With More Time
 
 1. MFA for identity verification; verification link sent to phone number or email associated with ID number.
 2. Locking registration for a patient if their information has been compromised, a flag showing that the patient is locked from registration, the option to rollback changes that have been made to their patient data, and unlocking registration if the problem has been resolved.
+3. Better error logging -> split between sanitized public consumable error and internal verbose errors.
+4. All operations happening inside transactions. For operations where more than one database entity is mutated it is critical that if one fails that the rest can rollback as well so that data does not become out of sync. e.g. registration document approved but patient record was not updated correctly.
+5. RLS. There would additional authentication given more time, but it would be best if data was protected on the database level as well.
+6. The frontend, because of its simplicity has been almost entirely vibe coded, meaning there is duplication, unclean code and some incorrect assumptions the model has made regarding how the codebase should structured.
+7. There are some hardcoded values for medical aid schemes, ideally these would be stored in the database and could be retrieved for showing in a dropdown, for example, on the frontend.
+8. Writing the entire backend in Rust :)
 
 ---
 
@@ -47,62 +54,17 @@ The resulting system design, domain logic and rules follow:
 
 ## Core Data Model
 
-**PatientReg** separates:
-- Permanent patient records
-- Temporary registration requests
-- Workflow actions / approvals
-- Audit trail
-
-The goal is to allow patients to submit updated information without directly mutating the canonical patient record until reviewed by staff.
+The goal is to allow patients to submit updated information without directly mutating the canonical patient record until approved by staff.
 
 The core entities are:
 - Practice
 - Registration Request
-- Patient
-- Identity (South African IDs)
-- User
+- Registration Document
+- Registration Link
+- PatientRecord
+- PatientIdentity (mimicking "global" database of pre-existing citizen data)
 
-### Practice
-
-Details for a practice registered in the system with:
-- id
-- name
-
-practice has many patients
-patient has many practices
-
-### Registration Request
-
-Details for a registration request:
-- id
-- state (approved, rejected, awaiting completion, awaiting review - submitted)
-- patient SA ID (foreign key, encrypted)
-- practice id (foreign key)
-
-practice id, patient SA ID pair is unique.
-
-patient can have many registration requests
-practice can have many registration requests
-practice can not have more than one registration request to the same patient
-
-### Identity
-
-Simple table containing records of:
-- id
-- SA_ID (hashed)
-
-patient has one identity
-
-### Patient
-
-Patient Data is encrypted
-
-### User
-
-- id
-- username
-- password (hashed)
-- type (can only be admin right now)
+All PII is encrypted or hashed (only RSA IDs).
 
 ## User Flow Charts
 
@@ -143,7 +105,6 @@ flowchart TD;
     D --> E{Decision}
     E -- Approve --> F[Confirm approval]
     F --> G[Patient record updated]
-    G --> H([Notification triggered: approved])
     E -- Reject --> I[Enter mandatory rejection reason]
     I --> J[Confirm rejection]
     J --> K([Notification triggered: needs revision])
