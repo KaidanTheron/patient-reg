@@ -9,6 +9,16 @@ Azure Deployment and Security [here](docs/azure.md)
 
 Approximate Time Spent: 40 hours
 
+## Notes
+
+- [Tradeoffs](docs/design.md#tradeoffs)
+
+- [Assumptions](docs/design.md#assumptions)
+
+- [Concerns](docs/design.md#concerns)
+
+- [Possible Improvements](docs/design.md#possible-improvements)
+
 ---
 
 ## Prerequisites
@@ -326,19 +336,3 @@ Variables:
   }
 }
 ```
-
----
-
-## Notes
-
-### [Tradeoffs](docs/design.md#tradeoffs)
-
-### [Assumptions](docs/design.md#assumptions)
-
-### [Concerns](docs/design.md#concerns)
-
-### [Possible Improvements](docs/design.md#possible-improvements)
-
-## Deployment
-
-TODO - how it could be deployed and secured in an Azure setting
