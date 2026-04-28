@@ -129,67 +129,34 @@ export class SubmitRegistrationDocumentInput {
 @ObjectType()
 export class RegistrationDocumentPayload {
   @Field()
+  id: string;
+
+  @Field()
+  patientIdentityId: string;
+
+  @Field()
   submittedAt: Date;
 
-  @Field(() => String, { nullable: true })
-  email?: string | null;
+  @Field(() => ContactDetailsPayload, { nullable: true })
+  contactDetails?: ContactDetailsPayload | null;
 
-  @Field(() => String, { nullable: true })
-  phone?: string | null;
+  @Field(() => PersonalInformationPayload, { nullable: true })
+  personalInformation?: PersonalInformationPayload | null;
 
-  @Field(() => String, { nullable: true })
-  altphone?: string | null;
+  @Field(() => MedicalAidDetailsPayload, { nullable: true })
+  medicalAidDetails?: MedicalAidDetailsPayload | null;
 
-  @Field(() => String, { nullable: true })
-  residentialAddress?: string | null;
-
-  @Field(() => String, { nullable: true })
-  firstname?: string | null;
-
-  @Field(() => String, { nullable: true })
-  lastname?: string | null;
-
-  @Field(() => String, { nullable: true })
-  dateOfBirth?: string | null;
-
-  @Field(() => String, { nullable: true })
-  gender?: string | null;
-
-  @Field(() => String, { nullable: true })
-  scheme?: string | null;
-
-  @Field(() => String, { nullable: true })
-  memberNumber?: string | null;
-
-  @Field(() => String, { nullable: true })
-  mainMember?: string | null;
-
-  @Field(() => String, { nullable: true })
-  mainMemberId?: string | null;
-
-  @Field(() => String, { nullable: true })
-  dependantCode?: string | null;
-
-  @Field(() => String, { nullable: true })
-  allergies?: string | null;
-
-  @Field(() => String, { nullable: true })
-  currentMedication?: string | null;
-
-  @Field(() => String, { nullable: true })
-  chronicConditions?: string | null;
-
-  @Field(() => String, { nullable: true })
-  previousSurgeries?: string | null;
-
-  @Field(() => String, { nullable: true })
-  familyHistory?: string | null;
+  @Field(() => MedicalHistoryPayload, { nullable: true })
+  medicalHistory?: MedicalHistoryPayload | null;
 }
 
 @ObjectType()
 export class PatientIdentityPayload {
   @Field(() => String, { nullable: true })
-  fullName?: string | null;
+  firstname?: string | null;
+
+  @Field(() => String, { nullable: true })
+  lastname?: string | null;
 
   @Field(() => String, { nullable: true })
   email?: string | null;
@@ -241,7 +208,7 @@ export class ContactDetailsPayload {
   altphone?: string | null;
 
   @Field(() => String, { nullable: true })
-  residentialAddress?: string | null;
+  address?: string | null;
 }
 
 @ObjectType()

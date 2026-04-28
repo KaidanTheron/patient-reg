@@ -44,6 +44,8 @@ export class TypeOrmPatientRecordRepository extends Port {
       patientIdentity: { identity },
       email: draft.contactDetails.email?.toPersisted(),
       phoneNumber: draft.contactDetails.phone?.toPersisted(),
+      firstname: draft.personalInformation.firstname?.toPersisted(),
+      lastname: draft.personalInformation.lastname?.toPersisted(),
     });
 
     const loaded = await this.repo.findOneOrFail({

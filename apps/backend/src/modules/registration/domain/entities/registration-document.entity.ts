@@ -128,12 +128,17 @@ export class RegistrationDocument {
 		submittedAt: Date;
 	}> {
 		const profile = await decryptProfileVOs(this, encrypter);
-		return {
+		const payload = {
 			id: this.id,
 			registrationRequestId: this.registrationRequestId,
 			patientIdentityId: this.patientIdentityId.toString(),
-			...profile,
+			contactDetails: { ...profile.contactDetails },
+			medicalAidDetails: { ...profile.medicalAidDetails },
+			medicalHistory: { ...profile.medicalHistory },
+			personalInformation: { ...profile.personalInformation },
 			submittedAt: this.submittedAt,
-		};
+		}
+
+		return payload;
 	}
 }

@@ -817,14 +817,17 @@ export class RegistrationService {
     document?: SubmittedDocumentDetails | null,
   ): RegistrationRequestListItem {
     const rejectionReason = request.getRejectionReason();
-    return {
+
+    const payload = {
       registrationRequestId: request.id,
       registrationRequestStatus: request.getStatus().toString(),
       practiceName,
       rejectionReason,
       patient: patient,
       document: document,
-    };
+    }
+
+    return payload;
   }
 
   private async toRegistrationRequestListItemWithIdentity(

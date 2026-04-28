@@ -29,10 +29,10 @@ input ContactDetailsInput {
 }
 
 type ContactDetailsPayload {
+  address: String
   altphone: String
   email: String
   phone: String
-  residentialAddress: String
 }
 
 """
@@ -93,7 +93,8 @@ type Mutation {
 
 type PatientIdentityPayload {
   email: String
-  fullName: String
+  firstname: String
+  lastname: String
   phone: String
 }
 
@@ -156,24 +157,12 @@ type Query {
 }
 
 type RegistrationDocumentPayload {
-  allergies: String
-  altphone: String
-  chronicConditions: String
-  currentMedication: String
-  dateOfBirth: String
-  dependantCode: String
-  email: String
-  familyHistory: String
-  firstname: String
-  gender: String
-  lastname: String
-  mainMember: String
-  mainMemberId: String
-  memberNumber: String
-  phone: String
-  previousSurgeries: String
-  residentialAddress: String
-  scheme: String
+  contactDetails: ContactDetailsPayload
+  id: String!
+  medicalAidDetails: MedicalAidDetailsPayload
+  medicalHistory: MedicalHistoryPayload
+  patientIdentityId: String!
+  personalInformation: PersonalInformationPayload
   submittedAt: DateTime!
 }
 

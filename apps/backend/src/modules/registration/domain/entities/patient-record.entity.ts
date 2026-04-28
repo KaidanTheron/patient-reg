@@ -129,7 +129,10 @@ export class PatientRecord {
 		return {
 			id: this.id,
 			patientIdentityId: this.patientIdentityId.toString(),
-			...profile,
+			contactDetails: { ...profile.contactDetails },
+			medicalAidDetails: { ...profile.medicalAidDetails },
+			medicalHistory: { ...profile.medicalHistory },
+			personalInformation: { ...profile.personalInformation },
 			updatedAt: this.updatedAt,
 		};
 	}
