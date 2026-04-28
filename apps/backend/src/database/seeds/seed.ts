@@ -18,12 +18,14 @@ async function main(): Promise<void> {
     let skippedCount = 0;
 
     for (const identity of identities) {
+      const { firstname, identity: id, lastname, email, phone } = identity;
+
       const [hIdentity, ePhone, eEmail, eFirstname, eLastname] = await Promise.all([
-        hasher.hash(identity.identity),
-        encrypter.encrypt(identity.phone!),
-        encrypter.encrypt(identity.email!),
-        encrypter.encrypt(identity.firstname!),
-        encrypter.encrypt(identity.lastname!),
+        hasher.hash(id),
+        phone ? encrypter.encrypt(phone) : undefined,
+        email ? encrypter.encrypt(email) : undefined,
+        firstname ? encrypter.encrypt(firstname) : undefined,
+        lastname ? encrypter.encrypt(lastname) : undefined,
       ])
       const already = await patientIdentities.exists({
         where: { identity: hIdentity },

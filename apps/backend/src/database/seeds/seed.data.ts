@@ -1,9 +1,8 @@
 import { PatientIdentityEntity } from "~/modules/registration/infrastructure/persistence/typeorm/entities/patient-identity.entity";
 import { ConsentType } from "~/modules/registration/domain/entities/consent-template.entity";
 
-export const identities: readonly Omit<PatientIdentityEntity, "id">[] = [
+export const identities: readonly (Omit<PatientIdentityEntity, "id" | "phone" | "email"> & { phone?: string, email?: string })[] = [
   {
-    email: "notreal@notreal.com",
     identity: "0501018431087",
     phone: "+27825550199",
     firstname: "Johan",
