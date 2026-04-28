@@ -1,11 +1,5 @@
 import { Field, InputType, Int, ObjectType } from "@nestjs/graphql";
 
-@InputType()
-export class CreatePracticeInput {
-  @Field()
-  name: string;
-}
-
 @ObjectType()
 export class PracticePayload {
   @Field()

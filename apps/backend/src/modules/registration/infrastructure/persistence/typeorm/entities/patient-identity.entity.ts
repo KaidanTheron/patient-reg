@@ -8,15 +8,15 @@ export class PatientIdentityEntity {
   @Column({ type: "varchar", unique: true })
   identity: string;
 
-  @Column({ type: "text", nullable: false })
+  @Column({ type: "text", nullable: true })
   email: string | null;
 
-  @Column({ type: "text", nullable: false })
+  @Column({ type: "text", nullable: true })
   phone: string | null;
 
-  @Column({ type: "text", nullable: true })
+  @Column({ type: "text", nullable: false })
   firstname: string | null;
 
-  @Column({ type: "text", nullable: true })
+  @Column({ type: "text", nullable: false })
   lastname: string | null;
 }

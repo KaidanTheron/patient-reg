@@ -15,7 +15,6 @@ import {
   ApproveRegistrationInput,
   ConsentRecordPayload,
   ConsentTemplatePayload,
-  CreatePracticeInput,
   InitiateRegistrationInput,
   PatientProfilePayload,
   PracticePayload,
@@ -29,13 +28,6 @@ import {
 @Resolver()
 export class RegistrationResolver {
   constructor(private readonly registration: RegistrationService) {}
-
-  @Mutation(() => PracticePayload)
-  async createPractice(
-    @Args("input") input: CreatePracticeInput,
-  ): Promise<PracticePayload> {
-    return this.registration.createPractice(input);
-  }
 
   @Mutation(() => RegistrationRequestPayload)
   @UseGuards(PracticeSessionGuard)
