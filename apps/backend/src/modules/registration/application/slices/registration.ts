@@ -8,22 +8,14 @@ import { Notifier } from "~/modules/registration/domain/ports/notifier";
 import { RegistrationLinkTokenSigner } from "~/modules/registration/domain/ports/registration-link-token.signer";
 import { RegistrationLinkFormatter } from "~/modules/registration/domain/ports/registration-link.formatter";
 import {
-  DraftRegistrationRequest,
   RegistrationRequest,
-  UpdateRegistrationRequest,
 } from "~/modules/registration/domain/entities/registration-request.entity";
-import {
-  DraftRegistrationLink,
-  UpdateRegistrationLink,
-  VerifyLinkOutcome,
-} from "~/modules/registration/domain/entities/registration-link.entity";
 import { PatientSessionTokenSigner } from "~/modules/registration/domain/ports/patient-session-token.signer";
 import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 import { RsaIdNumber } from "~/modules/registration/domain/value-objects/rsaid";
 import { Hasher } from "~/modules/registration/domain/ports/hasher";
 import { RegistrationLinkRepository } from "~/modules/registration/domain/ports/registration-link.repository";
 import { Encrypter } from "~/modules/registration/domain/ports/encrypter";
-import { DraftPatientPractice } from "~/modules/registration/domain/entities/patient-practice.entity";
 import { PatientPracticeRepository } from "~/modules/registration/domain/ports/patient-practice.repository";
 import { RegistrationDocumentRepository } from "~/modules/registration/domain/ports/registration-document.repository";
 import {
@@ -31,23 +23,20 @@ import {
   RegistrationDocument,
   UpdateRegistrationDocument,
 } from "~/modules/registration/domain/entities/registration-document.entity";
-import {
-  DraftPatientRecord,
-  UpdatePatientRecord,
-} from "~/modules/registration/domain/entities/patient-record.entity";
 import { type VerifiedPatientSession } from "~/modules/registration/application/support/protected-patient-session";
 import { type VerifiedPracticeSession } from "~/modules/registration/application/support/verified-practice-session";
 import { formatLocalDateAsIsoDate } from "~/common/date";
-import {
-  ContactDetails,
-  MedicalAidDetails,
-  MedicalHistory,
-  PersonalInformation,
-} from "~/modules/registration/domain/value-objects";
 import { MAX_ATTEMPTS } from "../../domain/constants/registration-link.constants";
 import { ConsentTemplateRepository } from "~/modules/registration/domain/ports/consent-template.repository";
 import { ConsentRecordRepository } from "~/modules/registration/domain/ports/consent-record.repository";
 import { DraftConsentRecord } from "~/modules/registration/domain/entities/consent-record.entity";
+import {
+  approveRegistration as approveRegistrationService,
+  rejectRegistration as rejectRegistrationService,
+  initiateRegistration as initiateRegistrationService,
+  submitRegistrationDocument as submitRegistrationDocumentService,
+  verifyRegistration as verifyRegistrationService,
+} from "~/modules/registration/domain/services";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -260,7 +249,6 @@ export class RegistrationService {
     private readonly consentRecords: ConsentRecordRepository,
   ) {}
 
-  // updates registration request status, updates patient record and links patient and practice
   async approveRegistration(
     command: ApproveRegistrationCommand,
   ): Promise<ApproveRegistrationResult> {
@@ -269,64 +257,29 @@ export class RegistrationService {
       command.practiceSession.practiceId,
     );
 
-    request.approve();
+    const [document, patient, practice] = await Promise.all([
+      this.registrationDocuments.findByRegistrationRequestId(request.id),
+      this.patientRecords.findByPatientIdentity(request.patientIdentityId),
+      this.practices.findById(request.practiceId),
+    ]);
 
-    await this.registrationRequests.update(
-      command.registrationRequestId,
-      new UpdateRegistrationRequest(
-        request.getStatus(),
-        request.getRejectionReason(),
-      ),
-    );
+    const effects = approveRegistrationService({
+      request,
+      document,
+      patient,
+      practice,
+    });
 
-    const document =
-      await this.registrationDocuments.findByRegistrationRequestId(request.id);
-    if (!document) {
-      throw new Error("Registration has no submitted document to approve");
-    }
-
-    const existingRecord = await this.patientRecords.findByPatientIdentity(
-      request.patientIdentityId,
-    );
-    if (!existingRecord) {
-      const identity = await this.patientIdentities.findById(
-        request.patientIdentityId,
-      );
-      if (!identity) {
-        throw new Error("Patient identity not found for this registration");
-      }
-
-      await this.patientRecords.ensureFromIdentity(
-        new DraftPatientRecord(
-          request.patientIdentityId,
-          ContactDetails.create(identity),
-          PersonalInformation.create({}),
-          MedicalAidDetails.create({}),
-          MedicalHistory.create({}),
-        ),
-      );
-    }
-
-    await this.patientRecords.update(
-      request.patientIdentityId,
-      new UpdatePatientRecord(
-        document.contactDetails,
-        document.personalInformation,
-        document.medicalAidDetails,
-        document.medicalHistory,
-      ),
-    );
-
-    await this.patientPractices.ensureLinked(
-      new DraftPatientPractice(request.patientIdentityId, request.practiceId),
-    );
-
-    const practiceName = await this.resolvePracticeName(request.practiceId);
+    await Promise.all([
+      this.registrationRequests.update(command.registrationRequestId, effects.updatedRequest),
+      this.patientRecords.update(request.patientIdentityId, effects.updatedPatient),
+      this.patientPractices.ensureLinked(effects.patientPracticeLink),
+    ]);
 
     return {
       registrationRequestId: request.id,
       registrationRequestStatus: request.getStatus().toString(),
-      practiceName,
+      practiceName: effects.practice.name,
     };
   }
 
@@ -338,37 +291,34 @@ export class RegistrationService {
       command.practiceSession.practiceId,
     );
 
-    request.reject(command.reason);
+    const [practice, patient] = await Promise.all([
+      this.practices.findById(request.practiceId),
+      this.patientIdentities.findById(request.patientIdentityId),
+    ]);
 
-    await this.registrationRequests.update(
-      command.registrationRequestId,
-      new UpdateRegistrationRequest(
-        request.getStatus(),
-        request.getRejectionReason(),
-      ),
+    const effects = rejectRegistrationService({
+      request,
+      reason: command.reason,
+      practice,
+      patient,
+    });
+
+    const [rawEmail, rawPhone] = await Promise.all([
+      effects.patient.email?.decrypt(this.encrypter),
+      effects.patient.phone?.decrypt(this.encrypter),
+      this.registrationRequests.update(command.registrationRequestId, effects.updatedRequest)
+    ])
+
+    const recipient = rawEmail ?? rawPhone!; // one of email or phone will be defined as per business rules
+    await this.notifier.notify(
+      recipient,
+      `Your registration request (${request.id}) has been rejected. Reason: ${command.reason}.`,
     );
-
-    const identity = await this.patientIdentities.findById(
-      request.patientIdentityId,
-    );
-    if (identity) {
-      const rawEmail = await identity.email?.decrypt(this.encrypter);
-      const rawPhone = await identity.phone?.decrypt(this.encrypter);
-      const recipient = rawEmail ?? rawPhone;
-      if (recipient) {
-        await this.notifier.notify(
-          recipient,
-          `Your registration request (${request.id}) has been rejected. Reason: ${command.reason}.`,
-        );
-      }
-    }
-
-    const practiceName = await this.resolvePracticeName(request.practiceId);
 
     return {
       registrationRequestId: request.id,
       registrationRequestStatus: request.getStatus().toString(),
-      practiceName,
+      practiceName: effects.practice.name,
       rejectionReason: request.getRejectionReason()!,
     };
   }
@@ -382,70 +332,42 @@ export class RegistrationService {
     const identity = RsaIdNumber.create(rawIdentity);
     const hashedIdentity = await HashedRsaId.create(identity, this.hasher);
 
-    const [patient, practice] = await Promise.all([
+    const [patient, practice, existingRequest] = await Promise.all([
       this.patientIdentities.findById(hashedIdentity),
       this.practices.findById(practiceId),
+      this.registrationRequests.findByPatientAndPractice(hashedIdentity, practiceId),
     ]);
 
-    if (!patient) {
-      throw new Error("Registrant not found.");
-    }
-
-    if (!patient.email && !patient.phone) {
-      throw new Error(
-        "Registrant contact details not found, unable to initiate registration privately.",
-      );
-    }
-
-    if (!practice) {
-      throw new Error("Practice not found.");
-    }
-
-    const alreadyExists =
-      await this.registrationRequests.findByPatientAndPractice(
-        hashedIdentity,
-        practiceId,
-      );
-    if (alreadyExists) {
-      throw new Error("A registration request for this patient already exists");
-    }
-
-    const newRequest = new DraftRegistrationRequest(hashedIdentity, practiceId);
-
-    const created = await this.registrationRequests.create(newRequest);
-
-    await this.registrationLinks.revokeActiveForPatient(hashedIdentity);
-
-    const draftLink = DraftRegistrationLink.create(
+    const effects = initiateRegistrationService({
+      patient,
+      practice,
+      existingRequest,
       hashedIdentity,
       initiatedByStaffId,
-    );
-    const link = await this.registrationLinks.create(draftLink);
+    });
+
+    const [created, link, rawEmail, rawPhone] = await Promise.all([
+      this.registrationRequests.create(effects.draftRequest),
+      this.registrationLinks.create(effects.draftLink),
+      effects.patient.email?.decrypt(this.encrypter),
+      effects.patient.phone?.decrypt(this.encrypter),   
+    ]);
 
     const token = this.registrationLinkTokenSigner.sign({
       registrationLinkId: link.id,
       expiresAt: link.expiresAt,
     });
     const sendableUrl = this.registrationLinkFormatter.format(token);
-    const rawEmail = await patient.email?.decrypt(this.encrypter);
-    const rawPhone = await patient.phone?.decrypt(this.encrypter);
     await this.notifier.notify(
-      rawEmail ?? rawPhone!, // one of the two will be defined because of check
+      rawEmail ?? rawPhone!, // one of the two will be defined as per business rules
       `Open ${sendableUrl} in your browser to continue registration (request ${created.id}).`,
     );
 
     return {
       registrationRequestId: created.id,
       registrationRequestStatus: created.getStatus().toString(),
-      practiceName: practice.name,
+      practiceName: effects.practice.name,
     };
-  }
-
-  async createPractice(
-    command: CreatePracticeCommand,
-  ): Promise<PracticeResult> {
-    const practice = await this.practices.create(command.name);
-    return this.toPracticeResult(practice);
   }
 
   async findPracticeById(id: Practice["id"]): Promise<PracticeResult | null> {
@@ -457,9 +379,6 @@ export class RegistrationService {
     const list = await this.practices.findAll();
     return list.map((p) => this.toPracticeResult(p));
   }
-
-  // finds patient-practice links for a practice
-  async findLinkedPatients(_practiceId: Practice["id"]) {}
 
   /**
    * Staff-only. Callers must pass a {@link VerifiedPracticeSession} from
@@ -556,37 +475,38 @@ export class RegistrationService {
     command: SubmitRegistrationDocumentCommand,
   ): Promise<SubmitRegistrationDocumentResult> {
     const { patientIdentityId } = command.patientSession;
+
     const request = await this.findRequestForPatient(
       command.registrationRequestId,
       patientIdentityId,
     );
 
-    const consent = await this.consentRecords.findByRegistrationRequestId(
-      command.registrationRequestId,
-    );
-    if (!consent) {
-      throw new ForbiddenException(
-        "Consent must be given before submitting registration",
-      );
-    }
+    const [consent, existingDocument, practice] = await Promise.all([
+      this.consentRecords.findByRegistrationRequestId(request.id),
+      this.registrationDocuments.findByRegistrationRequestId(request.id),
+      this.practices.findById(request.practiceId),
+    ]);
+
+    const effects = submitRegistrationDocumentService({
+      request,
+      consent,
+      existingDocument,
+      patientIdentityId,
+    });
 
     const { contactDetails: cd, personalInformation: pi } = command;
     const { medicalAidDetails: ma, medicalHistory: mh } = command;
 
     const profileParams = {
-      contactDetails: { email: cd.email, phone: cd.phone, altphone: cd.altphone, address: cd.residentialAddress },
+      contactDetails: { ...cd, address: cd.residentialAddress },
       personalInformation: { ...pi },
       medicalAidDetails: { ...ma },
       medicalHistory: { ...mh },
     };
 
-    request.submit(patientIdentityId);
-
-    const existing =
-      await this.registrationDocuments.findByRegistrationRequestId(request.id);
-    if (existing) {
+    if (effects.existingDocumentId) {
       await this.registrationDocuments.update(
-        existing.id,
+        effects.existingDocumentId,
         await UpdateRegistrationDocument.fromRaw(
           { ...profileParams, submittedAt: new Date() },
           this.encrypter,
@@ -601,20 +521,12 @@ export class RegistrationService {
       );
     }
 
-    await this.registrationRequests.update(
-      request.id,
-      new UpdateRegistrationRequest(
-        request.getStatus(),
-        request.getRejectionReason(),
-      ),
-    );
-
-    const practiceName = await this.resolvePracticeName(request.practiceId);
+    await this.registrationRequests.update(request.id, effects.updatedRequest);
 
     return {
       registrationRequestId: request.id,
       registrationRequestStatus: request.getStatus().toString(),
-      practiceName,
+      practiceName: practice?.name ?? "",
     };
   }
 
@@ -751,9 +663,14 @@ export class RegistrationService {
   async verifyRegistration(
     command: VerifyRegistrationCommand,
   ): Promise<VerifyRegistrationResult> {
-    const link = await this.registrationLinks.findById(
-      command.registrationLinkId,
-    );
+    const identity = RsaIdNumber.create(command.rsaId);
+    const hashedIdentity = await HashedRsaId.create(identity, this.hasher);
+
+    const [link, patientIdentity] = await Promise.all([
+      this.registrationLinks.findById(command.registrationLinkId),
+      this.patientIdentities.findById(hashedIdentity),
+    ]);
+
     if (!link) {
       return {
         success: false,
@@ -762,42 +679,20 @@ export class RegistrationService {
       };
     }
 
-    const identity = RsaIdNumber.create(command.rsaId);
-    const hashed = await HashedRsaId.create(identity, this.hasher);
+    const effects = verifyRegistrationService({ link, hashedIdentity, patientIdentity });
 
-    const outcome: VerifyLinkOutcome = link.verify(hashed);
+    await Promise.all([
+      effects.updatedLink && this.registrationLinks.update(link.id, effects.updatedLink),
+      effects.newPatient && this.patientRecords.ensureFromIdentity(effects.newPatient),
+    ]);
 
-    if (!outcome.success) {
-      if (
-        outcome.errorCode === "IDENTITY_MISMATCH" ||
-        outcome.errorCode === "ATTEMPTS_EXHAUSTED"
-      ) {
-        await this.registrationLinks.update(
-          link.id,
-          new UpdateRegistrationLink(link.getStatus(), link.getAttempts()),
-        );
-      }
+    if (!effects.outcome.success) {
       return {
         success: false,
-        errorCode: outcome.errorCode,
+        errorCode: effects.outcome.errorCode,
         maxAttempts: link.maxAttempts,
-        attemptsAfterFailure: outcome.attemptsAfterFailure,
+        attemptsAfterFailure: effects.outcome.attemptsAfterFailure,
       };
-    }
-
-    const patientIdentity = await this.patientIdentities.findById(hashed);
-    if (patientIdentity) {
-      const { email, phone, firstname, lastname } = patientIdentity;
-
-      await this.patientRecords.ensureFromIdentity(
-        new DraftPatientRecord(
-          hashed,
-          ContactDetails.create({ email, phone }),
-          PersonalInformation.create({ firstname, lastname }),
-          MedicalAidDetails.create({}),
-          MedicalHistory.create({}),
-        ),
-      );
     }
 
     const sessionToken = this.patientSessionTokenSigner.sign({
