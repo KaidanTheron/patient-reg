@@ -9,35 +9,51 @@ LLM Usage is documented [here](docs/llm_usage.md).
 
 ## Local Development
 
-TODO - Remove docker usage for local dev except for postgres. Setup prod docker versions.
-
 ### Prerequisites
 
 TODO - dependencies, versions and how to install them on different platforms
 
 TODO - project setup; environment variables, cloning the repo, etc.
 
+### Running The Application
+
+Copy the example environment file and start all services:
+
+```bash
+cp .env.example .env
+docker compose up -d
+```
+
+Migrations are run automatically when the backend container starts.
+
+If you only want the database running and everything else locally (hot reloading):
+
+```bash
+docker compose up -d db
+pnpm dev
+```
+
 ### Seeding The Data
 
-TODO
+With the application running, seed the database from the project root:
 
-### Running The Service
-
-For hot reloading run:
 ```bash
-docker compose -f dev.docker-compose.yaml up -d
-```
-*** note, this only watches your local frontend/app and backend/src ***
-
-Or if you only want to run the postgres server and everything else manually:
-```bash
-docker compose -f dev.docker-compose.yaml up -d db
-pnpm dev
+docker compose exec backend pnpm run seed:prod
 ```
 
 ### Running Tests
 
-TODO - bash code block
+Run the backend unit tests from the project root:
+
+```bash
+pnpm --filter backend test
+```
+
+Run with coverage:
+
+```bash
+pnpm --filter backend test:cov
+```
 
 ### Examples
 

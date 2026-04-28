@@ -10,7 +10,7 @@ export const datasourceOptions: DataSourceOptions = {
   entities: [__dirname + "/../**/*.entity{.ts,.js}"],
   synchronize: false,
   migrationsRun: false,
-  migrations: [__dirname + "/../database/migrations/*.ts"],
+  migrations: [__dirname + "/../database/migrations/*{.ts,.js}"],
   migrationsTableName: "migrations",
   extra: {
     connectionLimit: env.DB_MAX_CONNECTIONS ?? 1,
