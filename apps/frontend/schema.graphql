@@ -3,10 +3,37 @@ schema {
   mutation: Mutation
 }
 
-type AuthLinkIssuePayload {
-  expiresAt: DateTime!
-  token: String!
-  uuid: String!
+input ApproveRegistrationInput {
+  approvedByStaffId: String!
+  registrationRequestId: String!
+}
+
+type ConsentRecordPayload {
+  consentTemplateId: String!
+  givenAt: String!
+  id: String!
+  registrationRequestId: String!
+}
+
+type ConsentTemplatePayload {
+  consentType: String!
+  id: String!
+  text: String!
+  version: String!
+}
+
+input ContactDetailsInput {
+  altphone: String
+  email: String
+  phone: String
+  residentialAddress: String
+}
+
+type ContactDetailsPayload {
+  address: String
+  altphone: String
+  email: String
+  phone: String
 }
 
 """
@@ -14,15 +41,167 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+input InitiateRegistrationInput {
+  initiatedByStaffId: String!
+  practiceId: String!
+  rsaId: String!
+}
+
+input MedicalAidDetailsInput {
+  dependantCode: String
+  mainMember: String
+  mainMemberId: String
+  memberNumber: String
+  scheme: String
+}
+
+type MedicalAidDetailsPayload {
+  dependantCode: String
+  mainMember: String
+  mainMemberId: String
+  memberNumber: String
+  scheme: String
+}
+
+input MedicalHistoryInput {
+  allergies: String
+  chronicConditions: String
+  currentMedication: String
+  familyHistory: String
+  previousSurgeries: String
+}
+
+type MedicalHistoryPayload {
+  allergies: String
+  chronicConditions: String
+  currentMedication: String
+  familyHistory: String
+  previousSurgeries: String
+}
+
 type Mutation {
-  createAuthLink(createdBy: String!, patient: String!): AuthLinkIssuePayload!
+  approveRegistration(input: ApproveRegistrationInput!): RegistrationRequestPayload!
+  """
+  Records the patient's consent for a registration request. Idempotent — safe to call more than once.
+  """
+  giveConsent(registrationRequestId: String!): ConsentRecordPayload!
+  initiateRegistration(input: InitiateRegistrationInput!): RegistrationRequestPayload!
+  rejectRegistration(input: RejectRegistrationInput!): RegistrationRequestPayload!
+  submitRegistrationDocument(input: SubmitRegistrationDocumentInput!): RegistrationRequestPayload!
+  verifyRegistration(input: VerifyRegistrationInput!): VerifyRegistrationPayload!
+}
+
+type PatientIdentityPayload {
+  email: String
+  firstname: String
+  lastname: String
+  phone: String
+}
+
+type PatientProfilePayload {
+  contactDetails: ContactDetailsPayload
+  medicalAidDetails: MedicalAidDetailsPayload
+  medicalHistory: MedicalHistoryPayload
+  personalInformation: PersonalInformationPayload
+}
+
+input PersonalInformationInput {
+  dateOfBirth: String
+  firstname: String
+  gender: String
+  lastname: String
+}
+
+type PersonalInformationPayload {
+  dateOfBirth: String
+  firstname: String
+  gender: String
+  lastname: String
+}
+
+type PracticePayload {
+  id: String!
+  name: String!
 }
 
 type Query {
-  validateRegistrationLink(token: String!): ValidatedRegistrationLinkPayload!
+  """
+  Returns true if the registration link token is valid, not expired, and not revoked.
+  """
+  checkRegistrationLinkValidity(token: String!): Boolean!
+  """ISO-8601 date (YYYY-MM-DD) derived from the RSA ID, for form UX."""
+  dateOfBirthFromRsaId(
+    """13-digit RSA ID"""
+    rsaId: String!
+  ): String!
+  """Gender ("MALE" or "FEMALE") derived from the RSA ID, for form UX."""
+  genderFromRsaId(
+    """13-digit RSA ID"""
+    rsaId: String!
+  ): String!
+  """
+  Returns the existing consent record for a registration request, or null if consent has not yet been given.
+  """
+  myConsentRecord(registrationRequestId: String!): ConsentRecordPayload
+  myPatientProfile: PatientProfilePayload!
+  myRegistrationRequest(id: String!): RegistrationRequestPayload!
+  myRegistrationRequests: [RegistrationRequestPayload!]!
+  patientProfile(registrationRequestId: String!): PatientProfilePayload!
+  practice(id: String!): PracticePayload
+  practiceRegistrationRequest(id: String!): RegistrationRequestPayload!
+  practiceRegistrationRequests: [RegistrationRequestPayload!]!
+  practices: [PracticePayload!]!
+  """
+  Returns the active consent template the patient must agree to before submitting registration.
+  """
+  registrationConsentTemplate(registrationRequestId: String!): ConsentTemplatePayload!
 }
 
-type ValidatedRegistrationLinkPayload {
-  patient: String!
-  uuid: String!
+type RegistrationDocumentPayload {
+  contactDetails: ContactDetailsPayload
+  id: String!
+  medicalAidDetails: MedicalAidDetailsPayload
+  medicalHistory: MedicalHistoryPayload
+  patientIdentityId: String!
+  personalInformation: PersonalInformationPayload
+  submittedAt: DateTime!
+}
+
+type RegistrationRequestPayload {
+  document: RegistrationDocumentPayload
+  patient: PatientIdentityPayload
+  practiceName: String!
+  registrationRequestId: String!
+  registrationRequestStatus: String!
+  rejectionReason: String
+}
+
+input RejectRegistrationInput {
+  """Reason given to the patient for the rejection."""
+  reason: String!
+  registrationRequestId: String!
+  rejectedByStaffId: String!
+}
+
+input SubmitRegistrationDocumentInput {
+  contactDetails: ContactDetailsInput
+  medicalAidDetails: MedicalAidDetailsInput
+  medicalHistory: MedicalHistoryInput
+  personalInformation: PersonalInformationInput
+  registrationRequestId: String!
+}
+
+input VerifyRegistrationInput {
+  rsaId: String!
+  token: String!
+}
+
+type VerifyRegistrationPayload {
+  attemptsAfterFailure: Int
+  errorCode: String
+  expiresAt: String
+  maxAttempts: Int
+  registrationLinkId: String
+  sessionToken: String
+  success: Boolean!
 }
