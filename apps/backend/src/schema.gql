@@ -7,6 +7,20 @@ input ApproveRegistrationInput {
   registrationRequestId: String!
 }
 
+type ConsentRecordPayload {
+  consentTemplateId: String!
+  givenAt: String!
+  id: String!
+  registrationRequestId: String!
+}
+
+type ConsentTemplatePayload {
+  consentType: String!
+  id: String!
+  text: String!
+  version: String!
+}
+
 input ContactDetailsInput {
   altphone: String
   email: String
@@ -71,6 +85,11 @@ type MedicalHistoryPayload {
 type Mutation {
   approveRegistration(input: ApproveRegistrationInput!): RegistrationRequestPayload!
   createPractice(input: CreatePracticeInput!): PracticePayload!
+
+  """
+  Records the patient's consent for a registration request. Idempotent — safe to call more than once.
+  """
+  giveConsent(registrationRequestId: String!): ConsentRecordPayload!
   initiateRegistration(input: InitiateRegistrationInput!): RegistrationRequestPayload!
   rejectRegistration(input: RejectRegistrationInput!): RegistrationRequestPayload!
   submitRegistrationDocument(input: SubmitRegistrationDocumentInput!): RegistrationRequestPayload!
@@ -121,6 +140,11 @@ type Query {
     """13-digit RSA ID"""
     rsaId: String!
   ): String!
+
+  """
+  Returns the existing consent record for a registration request, or null if consent has not yet been given.
+  """
+  myConsentRecord(registrationRequestId: String!): ConsentRecordPayload
   myPatientProfile: PatientProfilePayload!
   myRegistrationRequest(id: String!): RegistrationRequestPayload!
   myRegistrationRequests: [RegistrationRequestPayload!]!
@@ -129,6 +153,11 @@ type Query {
   practiceRegistrationRequest(id: String!): RegistrationRequestPayload!
   practiceRegistrationRequests: [RegistrationRequestPayload!]!
   practices: [PracticePayload!]!
+
+  """
+  Returns the active consent template the patient must agree to before submitting registration.
+  """
+  registrationConsentTemplate(registrationRequestId: String!): ConsentTemplatePayload!
 }
 
 type RegistrationDocumentPayload {

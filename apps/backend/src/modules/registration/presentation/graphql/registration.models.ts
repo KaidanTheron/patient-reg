@@ -339,3 +339,33 @@ export class VerifyRegistrationPayload {
   @Field(() => Int, { nullable: true })
   attemptsAfterFailure?: number;
 }
+
+@ObjectType()
+export class ConsentTemplatePayload {
+  @Field()
+  id: string;
+
+  @Field()
+  consentType: string;
+
+  @Field()
+  version: string;
+
+  @Field()
+  text: string;
+}
+
+@ObjectType()
+export class ConsentRecordPayload {
+  @Field()
+  id: string;
+
+  @Field()
+  registrationRequestId: string;
+
+  @Field()
+  consentTemplateId: string;
+
+  @Field()
+  givenAt: string;
+}

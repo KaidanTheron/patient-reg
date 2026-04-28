@@ -45,6 +45,9 @@ import {
   PersonalInformation,
 } from "~/modules/registration/domain/value-objects";
 import { MAX_ATTEMPTS } from "../../domain/constants/registration-link.constants";
+import { ConsentTemplateRepository } from "~/modules/registration/domain/ports/consent-template.repository";
+import { ConsentRecordRepository } from "~/modules/registration/domain/ports/consent-record.repository";
+import { DraftConsentRecord } from "~/modules/registration/domain/entities/consent-record.entity";
 
 export type CreatePracticeCommand = {
   name: string;
@@ -223,6 +226,20 @@ export type VerifyRegistrationResult =
 /** Decrypted profile fields for the session's patient; sourced from the canonical patient record. */
 export type PatientDetailsForAuthorizedSession = PatientProfile;
 
+export type ConsentTemplateResult = {
+  id: string;
+  consentType: string;
+  version: string;
+  text: string;
+};
+
+export type ConsentRecordResult = {
+  id: string;
+  registrationRequestId: string;
+  consentTemplateId: string;
+  givenAt: string;
+};
+
 @Injectable()
 export class RegistrationService {
   constructor(
@@ -239,6 +256,8 @@ export class RegistrationService {
     private readonly registrationLinkTokenSigner: RegistrationLinkTokenSigner,
     private readonly patientSessionTokenSigner: PatientSessionTokenSigner,
     private readonly registrationLinkFormatter: RegistrationLinkFormatter,
+    private readonly consentTemplates: ConsentTemplateRepository,
+    private readonly consentRecords: ConsentRecordRepository,
   ) {}
 
   // updates registration request status, updates patient record and links patient and practice
@@ -542,6 +561,15 @@ export class RegistrationService {
       patientIdentityId,
     );
 
+    const consent = await this.consentRecords.findByRegistrationRequestId(
+      command.registrationRequestId,
+    );
+    if (!consent) {
+      throw new ForbiddenException(
+        "Consent must be given before submitting registration",
+      );
+    }
+
     const { contactDetails: cd, personalInformation: pi } = command;
     const { medicalAidDetails: ma, medicalHistory: mh } = command;
 
@@ -587,6 +615,106 @@ export class RegistrationService {
       registrationRequestId: request.id,
       registrationRequestStatus: request.getStatus().toString(),
       practiceName,
+    };
+  }
+
+  /**
+   * Returns the active consent template for the practice linked to the given
+   * registration request. Validates that the request belongs to the patient session.
+   */
+  async getConsentTemplate(
+    patientSession: VerifiedPatientSession,
+    registrationRequestId: string,
+  ): Promise<ConsentTemplateResult> {
+    const request = await this.findRequestForPatient(
+      registrationRequestId,
+      patientSession.patientIdentityId,
+    );
+    const template = await this.consentTemplates.findActiveByPracticeAndType(
+      request.practiceId,
+      "REGISTRATION",
+    );
+    if (!template) {
+      throw new Error("No active consent template found for this practice");
+    }
+    return {
+      id: template.id,
+      consentType: template.consentType,
+      version: template.version,
+      text: template.text,
+    };
+  }
+
+  /**
+   * Returns the existing consent record for a registration request if one has
+   * already been given, or null otherwise. Does not create a new record.
+   */
+  async getMyConsentRecord(
+    patientSession: VerifiedPatientSession,
+    registrationRequestId: string,
+  ): Promise<ConsentRecordResult | null> {
+    await this.findRequestForPatient(
+      registrationRequestId,
+      patientSession.patientIdentityId,
+    );
+    const record = await this.consentRecords.findByRegistrationRequestId(
+      registrationRequestId,
+    );
+    if (!record) return null;
+    return {
+      id: record.id,
+      registrationRequestId: record.registrationRequestId,
+      consentTemplateId: record.consentTemplateId,
+      givenAt: record.givenAt.toISOString(),
+    };
+  }
+
+  /**
+   * Records consent for a registration request. Idempotent — returns the
+   * existing consent record if the patient has already given consent for this
+   * request.
+   */
+  async giveConsent(
+    patientSession: VerifiedPatientSession,
+    registrationRequestId: string,
+  ): Promise<ConsentRecordResult> {
+    const request = await this.findRequestForPatient(
+      registrationRequestId,
+      patientSession.patientIdentityId,
+    );
+
+    const existing = await this.consentRecords.findByRegistrationRequestId(
+      registrationRequestId,
+    );
+    if (existing) {
+      return {
+        id: existing.id,
+        registrationRequestId: existing.registrationRequestId,
+        consentTemplateId: existing.consentTemplateId,
+        givenAt: existing.givenAt.toISOString(),
+      };
+    }
+
+    const template = await this.consentTemplates.findActiveByPracticeAndType(
+      request.practiceId,
+      "REGISTRATION",
+    );
+    if (!template) {
+      throw new Error("No active consent template found for this practice");
+    }
+
+    const record = await this.consentRecords.create(
+      new DraftConsentRecord(
+        registrationRequestId,
+        patientSession.patientIdentityId,
+        template.id,
+      ),
+    );
+    return {
+      id: record.id,
+      registrationRequestId: record.registrationRequestId,
+      consentTemplateId: record.consentTemplateId,
+      givenAt: record.givenAt.toISOString(),
     };
   }
 

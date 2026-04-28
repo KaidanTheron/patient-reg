@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class Initial1777316964271 implements MigrationInterface {
-    name = 'Initial1777316964271'
+export class Initial1777361232592 implements MigrationInterface {
+    name = 'Initial1777361232592'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`CREATE TABLE "practices" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "name" character varying NOT NULL, CONSTRAINT "PK_0934829c5859a843625e6ff1c34" PRIMARY KEY ("id"))`);
@@ -16,6 +16,8 @@ export class Initial1777316964271 implements MigrationInterface {
         await queryRunner.query(`CREATE TABLE "patient_records" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "email" text, "phoneNumber" text, "altphone" text, "residentialAddress" text, "firstname" text, "lastname" text, "dateOfBirth" text, "gender" text, "scheme" text, "memberNumber" text, "mainMember" text, "mainMemberId" text, "dependantCode" text, "allergies" text, "currentMedication" text, "chronicConditions" text, "previousSurgeries" text, "familyHistory" text, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "patientIdentityId" character varying NOT NULL, CONSTRAINT "PK_146301514bbccff6c5138b36db4" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE TABLE "patient_practices" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "patientIdentityId" character varying NOT NULL, "practiceId" uuid NOT NULL, CONSTRAINT "PK_5d96906f254a49274b4435bbecb" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE UNIQUE INDEX "IDX_7016ca68d3d7f5112c1786bcab" ON "patient_practices" ("patientIdentityId", "practiceId") `);
+        await queryRunner.query(`CREATE TABLE "consent_templates" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "consentType" character varying NOT NULL, "version" character varying NOT NULL, "text" text NOT NULL, "isActive" boolean NOT NULL DEFAULT true, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "practiceId" uuid NOT NULL, CONSTRAINT "UQ_84f461b9849bfd4f4ddef229fdb" UNIQUE ("practiceId", "consentType", "version"), CONSTRAINT "PK_8dad5a4035191a16c11cdecf846" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "consent_records" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "givenAt" TIMESTAMP WITH TIME ZONE NOT NULL, "registrationRequestId" uuid, "patientIdentityId" character varying NOT NULL, "consentTemplateId" uuid NOT NULL, CONSTRAINT "REL_aadf5a8fd3065ab44533952879" UNIQUE ("registrationRequestId"), CONSTRAINT "PK_030be152eaa44998166470b2ccc" PRIMARY KEY ("id"))`);
         await queryRunner.query(`ALTER TABLE "registration_requests" ADD CONSTRAINT "FK_71d8258b5884f522d515f32f94c" FOREIGN KEY ("patientIdentityId") REFERENCES "patient_identities"("identity") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "registration_requests" ADD CONSTRAINT "FK_4ffe35fc5569866017226afb6e0" FOREIGN KEY ("practiceId") REFERENCES "practices"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "registration_links" ADD CONSTRAINT "FK_b6387a72fabcd6b650e00c8d173" FOREIGN KEY ("patientIdentityId") REFERENCES "patient_identities"("identity") ON DELETE NO ACTION ON UPDATE NO ACTION`);
@@ -24,9 +26,17 @@ export class Initial1777316964271 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "patient_records" ADD CONSTRAINT "FK_6bdc92dff49cafa1671dd5fc6b5" FOREIGN KEY ("patientIdentityId") REFERENCES "patient_identities"("identity") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "patient_practices" ADD CONSTRAINT "FK_8155cb88beebd3b888e334367c1" FOREIGN KEY ("patientIdentityId") REFERENCES "patient_identities"("identity") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "patient_practices" ADD CONSTRAINT "FK_733aefe0ad0d9913d46e4a23e85" FOREIGN KEY ("practiceId") REFERENCES "practices"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "consent_templates" ADD CONSTRAINT "FK_14b621b9abc1018702764c5cf5a" FOREIGN KEY ("practiceId") REFERENCES "practices"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "consent_records" ADD CONSTRAINT "FK_aadf5a8fd3065ab445339528797" FOREIGN KEY ("registrationRequestId") REFERENCES "registration_requests"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "consent_records" ADD CONSTRAINT "FK_bae8332b9292f2448b1d591751f" FOREIGN KEY ("patientIdentityId") REFERENCES "patient_identities"("identity") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "consent_records" ADD CONSTRAINT "FK_5416cad68541fd6cce12c393d88" FOREIGN KEY ("consentTemplateId") REFERENCES "consent_templates"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "consent_records" DROP CONSTRAINT "FK_5416cad68541fd6cce12c393d88"`);
+        await queryRunner.query(`ALTER TABLE "consent_records" DROP CONSTRAINT "FK_bae8332b9292f2448b1d591751f"`);
+        await queryRunner.query(`ALTER TABLE "consent_records" DROP CONSTRAINT "FK_aadf5a8fd3065ab445339528797"`);
+        await queryRunner.query(`ALTER TABLE "consent_templates" DROP CONSTRAINT "FK_14b621b9abc1018702764c5cf5a"`);
         await queryRunner.query(`ALTER TABLE "patient_practices" DROP CONSTRAINT "FK_733aefe0ad0d9913d46e4a23e85"`);
         await queryRunner.query(`ALTER TABLE "patient_practices" DROP CONSTRAINT "FK_8155cb88beebd3b888e334367c1"`);
         await queryRunner.query(`ALTER TABLE "patient_records" DROP CONSTRAINT "FK_6bdc92dff49cafa1671dd5fc6b5"`);
@@ -35,6 +45,8 @@ export class Initial1777316964271 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "registration_links" DROP CONSTRAINT "FK_b6387a72fabcd6b650e00c8d173"`);
         await queryRunner.query(`ALTER TABLE "registration_requests" DROP CONSTRAINT "FK_4ffe35fc5569866017226afb6e0"`);
         await queryRunner.query(`ALTER TABLE "registration_requests" DROP CONSTRAINT "FK_71d8258b5884f522d515f32f94c"`);
+        await queryRunner.query(`DROP TABLE "consent_records"`);
+        await queryRunner.query(`DROP TABLE "consent_templates"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_7016ca68d3d7f5112c1786bcab"`);
         await queryRunner.query(`DROP TABLE "patient_practices"`);
         await queryRunner.query(`DROP TABLE "patient_records"`);

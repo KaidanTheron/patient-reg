@@ -13,6 +13,8 @@ import { PatientSessionGuard } from "~/modules/registration/presentation/graphql
 import { PracticeSessionGuard } from "~/modules/registration/presentation/graphql/practice-session.guard";
 import {
   ApproveRegistrationInput,
+  ConsentRecordPayload,
+  ConsentTemplatePayload,
   CreatePracticeInput,
   InitiateRegistrationInput,
   PatientProfilePayload,
@@ -214,5 +216,48 @@ export class RegistrationResolver {
     @PatientSession() patientSession: VerifiedPatientSession,
   ): Promise<RegistrationRequestPayload> {
     return this.registration.findPatientRegRequestById(patientSession, id);
+  }
+
+  @Query(() => ConsentTemplatePayload, {
+    description:
+      "Returns the active consent template the patient must agree to before submitting registration.",
+  })
+  @UseGuards(PatientSessionGuard)
+  async registrationConsentTemplate(
+    @Args("registrationRequestId") registrationRequestId: string,
+    @PatientSession() patientSession: VerifiedPatientSession,
+  ): Promise<ConsentTemplatePayload> {
+    return await this.registration.getConsentTemplate(
+      patientSession,
+      registrationRequestId,
+    );
+  }
+
+  @Query(() => ConsentRecordPayload, {
+    nullable: true,
+    description:
+      "Returns the existing consent record for a registration request, or null if consent has not yet been given.",
+  })
+  @UseGuards(PatientSessionGuard)
+  async myConsentRecord(
+    @Args("registrationRequestId") registrationRequestId: string,
+    @PatientSession() patientSession: VerifiedPatientSession,
+  ): Promise<ConsentRecordPayload | null> {
+    return await this.registration.getMyConsentRecord(
+      patientSession,
+      registrationRequestId,
+    );
+  }
+
+  @Mutation(() => ConsentRecordPayload, {
+    description:
+      "Records the patient's consent for a registration request. Idempotent — safe to call more than once.",
+  })
+  @UseGuards(PatientSessionGuard)
+  async giveConsent(
+    @Args("registrationRequestId") registrationRequestId: string,
+    @PatientSession() patientSession: VerifiedPatientSession,
+  ): Promise<ConsentRecordPayload> {
+    return await this.registration.giveConsent(patientSession, registrationRequestId);
   }
 }
