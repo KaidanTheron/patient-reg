@@ -114,6 +114,12 @@ Seeded data:
 
 > The practice IDs printed after seeding are required as the Bearer token when calling practice-scoped GraphQL operations (see below).
 
+## Demo
+
+The below video demo's creating a registration link for a seeded identity, and accessing the link as the identity.
+After the steps followed in this video you would submit the registration document and go back to the practice view where you can review the submission.
+https://drive.google.com/file/d/1IuqUunZqGk5ggJtUyKGCkrHS13ZyBDGr/view?usp=sharing
+
 ---
 
 ## Running Tests
