@@ -13,6 +13,7 @@ import {
 import { PatientSessionTokenSigner } from "~/modules/registration/domain/ports/patient-session-token.signer";
 import { HashedRsaId } from "~/modules/registration/domain/value-objects/hashed-rsaid";
 import { RsaIdNumber } from "~/modules/registration/domain/value-objects/rsaid";
+import { RegistrationLinkStatus } from "~/modules/registration/domain/value-objects";
 import { Hasher } from "~/modules/registration/domain/ports/hasher";
 import { RegistrationLinkRepository } from "~/modules/registration/domain/ports/registration-link.repository";
 import { Encrypter } from "~/modules/registration/domain/ports/encrypter";
@@ -135,32 +136,6 @@ export type SubmitRegistrationDocumentResult = {
 };
 
 type PatientProfile = Omit<Awaited<ReturnType<RegistrationDocument["decrypt"]>>, "registrationRequestId" | "submittedAt">;
-
-// /** Flat decrypted patient profile fields shared across session-facing DTOs. */
-// type FlatPatientProfile = {
-//   // ContactDetails
-//   email?: string;
-//   phone?: string;
-//   altphone?: string;
-//   residentialAddress?: string;
-//   // PersonalInformation
-//   firstname?: string;
-//   lastname?: string;
-//   dateOfBirth?: string;
-//   gender?: string;
-//   // MedicalAidDetails
-//   scheme?: string;
-//   memberNumber?: string;
-//   mainMember?: string;
-//   mainMemberId?: string;
-//   dependantCode?: string;
-//   // MedicalHistory
-//   allergies?: string;
-//   currentMedication?: string;
-//   chronicConditions?: string;
-//   previousSurgeries?: string;
-//   familyHistory?: string;
-// };
 
 /** Decrypted fields from the submitted registration document; absent when not yet submitted. */
 export type SubmittedDocumentDetails = PatientProfile & { submittedAt: Date };
@@ -628,6 +603,23 @@ export class RegistrationService {
       consentTemplateId: record.consentTemplateId,
       givenAt: record.givenAt.toISOString(),
     };
+  }
+
+  /**
+   * Returns `true` when the signed link token is valid: the JWT parses
+   * correctly, the link exists, is not expired, and is not revoked.
+   * No patient data is required or returned.
+   */
+  async checkRegistrationLinkValidity(command: { token: string }): Promise<boolean> {
+    let registrationLinkId: string;
+    try {
+      registrationLinkId = this.registrationLinkTokenSigner.verify(command.token).registrationLinkId;
+    } catch {
+      return false;
+    }
+    const link = await this.registrationLinks.findById(registrationLinkId);
+    if (!link) return false;
+    return !link.isExpired() && !link.getStatus().equals(RegistrationLinkStatus.revoked());
   }
 
   // resends registration link for patient

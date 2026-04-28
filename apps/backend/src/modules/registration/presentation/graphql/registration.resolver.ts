@@ -141,6 +141,21 @@ export class RegistrationResolver {
     return this.registration.deriveGenderFromRsaId(rsaId);
   }
 
+  /**
+   * Returns `true` when the link token is valid: the JWT parses correctly,
+   * the link exists, is not expired, and is not revoked. No patient data required.
+   */
+  @Query(() => Boolean, {
+    name: "checkRegistrationLinkValidity",
+    description:
+      "Returns true if the registration link token is valid, not expired, and not revoked.",
+  })
+  async checkRegistrationLinkValidity(
+    @Args("token") token: string,
+  ): Promise<boolean> {
+    return this.registration.checkRegistrationLinkValidity({ token });
+  }
+
   @Query(() => PracticePayload, { nullable: true })
   async practice(@Args("id") id: string): Promise<PracticePayload | null> {
     return this.registration.findPracticeById(id);

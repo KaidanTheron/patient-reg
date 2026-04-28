@@ -125,6 +125,11 @@ type PracticePayload {
 }
 
 type Query {
+  """
+  Returns true if the registration link token is valid, not expired, and not revoked.
+  """
+  checkRegistrationLinkValidity(token: String!): Boolean!
+
   """ISO-8601 date (YYYY-MM-DD) derived from the RSA ID, for form UX."""
   dateOfBirthFromRsaId(
     """13-digit RSA ID"""
